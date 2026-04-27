@@ -15,7 +15,7 @@ import { formatEUR, formatPct } from '../lib/format'
 import type { Service } from '../types'
 
 export function PriceListPage() {
-  const { services, deleteService, updateService } = useApp()
+  const { services, isLoading, deleteService, updateService } = useApp()
   const [search, setSearch] = useState('')
   const [activeCategory, setActiveCategory] = useState<string | null>(null)
   const [editing, setEditing] = useState<Service | undefined>(undefined)
@@ -23,6 +23,39 @@ export function PriceListPage() {
   const [confirmDelete, setConfirmDelete] = useState<Service | undefined>(
     undefined,
   )
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [isUpdating, setIsUpdating] = useState(false)
+
+  if (isLoading) {
+    return (
+      <div className="mx-auto max-w-7xl px-5 py-6 sm:px-8 sm:py-10">
+        <div className="flex items-center justify-center py-20">
+          <div className="text-center">
+            <div className="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-ink-muted border-t-ink"></div>
+            <p className="mt-4 text-sm text-ink-soft">Lade Preisliste...</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const handleDelete = async (id: string) => {
+    setIsDeleting(true)
+    try {
+      await deleteService(id)
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
+  const handleToggleVisibility = async (id: string, visible: boolean) => {
+    setIsUpdating(true)
+    try {
+      await updateService(id, { visible: !visible })
+    } finally {
+      setIsUpdating(false)
+    }
+  }
 
   const categories = useMemo(() => {
     const map = new Map<string, number>()
@@ -179,10 +212,9 @@ export function PriceListPage() {
                 </div>
                 <div className="flex items-center justify-end gap-0.5">
                   <button
-                    onClick={() =>
-                      updateService(s.id, { visible: !s.visible })
-                    }
+                    onClick={() => handleToggleVisibility(s.id, s.visible)}
                     className="qty-btn"
+                    disabled={isUpdating}
                     title={
                       s.visible ? 'Im Rechner ausblenden' : 'Im Rechner anzeigen'
                     }
@@ -329,11 +361,12 @@ export function PriceListPage() {
       <ConfirmDialog
         open={!!confirmDelete}
         onClose={() => setConfirmDelete(undefined)}
-        onConfirm={() => confirmDelete && deleteService(confirmDelete.id)}
+        onConfirm={() => confirmDelete && handleDelete(confirmDelete.id)}
         title="Leistung löschen?"
         description={`"${confirmDelete?.name}" wird dauerhaft entfernt. Diese Aktion kann nicht rückgängig gemacht werden.`}
-        confirmLabel="Löschen"
+        confirmLabel={isDeleting ? 'Löschen...' : 'Löschen'}
         variant="danger"
+        disabled={isDeleting}
       />
 
       {/* Suppress unused variable lint */}

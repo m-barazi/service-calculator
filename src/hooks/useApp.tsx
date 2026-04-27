@@ -10,21 +10,26 @@ import {
 import type { Service, Settings } from '../types'
 import {
   loadCart,
-  loadServices,
   loadSettings,
-  newId,
   saveCart,
-  saveServices,
   saveSettings,
 } from '../lib/storage'
+import { 
+  fetchServices, 
+  createService, 
+  updateService as updateServiceApi, 
+  deleteService as apiDeleteService 
+} from '../lib/api'
 import { useTheme } from './useTheme'
 
 interface AppState {
   // Services
   services: Service[]
-  addService: (s: Omit<Service, 'id' | 'createdAt' | 'updatedAt'>) => void
-  updateService: (id: string, patch: Partial<Service>) => void
-  deleteService: (id: string) => void
+  isLoading: boolean
+  addService: (s: Omit<Service, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>
+  updateService: (id: string, patch: Partial<Service>) => Promise<void>
+  deleteService: (id: string) => Promise<void>
+  refreshServices: () => Promise<void>
 
   // Cart (serviceId → quantity)
   cart: Record<string, number>
@@ -44,17 +49,28 @@ interface AppState {
 const AppContext = createContext<AppState | null>(null)
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [services, setServices] = useState<Service[]>(() => loadServices())
+  const [services, setServices] = useState<Service[]>([])
+  const [isLoading, setIsLoading] = useState(true)
   const [cart, setCart] = useState<Record<string, number>>(() => loadCart())
   const [settings, setSettings] = useState<Settings>(() => loadSettings())
 
   // Apply theme
   useTheme(settings.theme)
 
-  // Persist services
+  // Load services from API on mount
   useEffect(() => {
-    saveServices(services)
-  }, [services])
+    const load = async () => {
+      try {
+        const data = await fetchServices()
+        setServices(data)
+      } catch (error) {
+        console.error('Failed to load services from API:', error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    load()
+  }, [])
 
   useEffect(() => {
     saveCart(cart)
@@ -65,26 +81,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [settings])
 
   // ---- Service operations ----
+  const refreshServices = useCallback(async () => {
+    try {
+      const data = await fetchServices()
+      setServices(data)
+    } catch (error) {
+      console.error('Failed to refresh services:', error)
+    }
+  }, [])
+
   const addService = useCallback(
-    (s: Omit<Service, 'id' | 'createdAt' | 'updatedAt'>) => {
-      const now = Date.now()
-      setServices((prev) => [
-        ...prev,
-        { ...s, id: newId(), createdAt: now, updatedAt: now },
-      ])
+    async (s: Omit<Service, 'id' | 'createdAt' | 'updatedAt'>) => {
+      const created = await createService(s)
+      setServices((prev) => [...prev, created])
     },
     [],
   )
 
-  const updateService = useCallback((id: string, patch: Partial<Service>) => {
+  const updateService = useCallback(async (id: string, patch: Partial<Service>) => {
+    const updated = await updateServiceApi(id, patch)
     setServices((prev) =>
-      prev.map((s) =>
-        s.id === id ? { ...s, ...patch, updatedAt: Date.now() } : s,
-      ),
+      prev.map((s) => (s.id === id ? updated : s)),
     )
   }, [])
 
-  const deleteService = useCallback((id: string) => {
+  const deleteService = useCallback(async (id: string) => {
+    await apiDeleteService(id)
     setServices((prev) => prev.filter((s) => s.id !== id))
     setCart((prev) => {
       const next = { ...prev }
@@ -125,9 +147,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const value = useMemo<AppState>(
     () => ({
       services,
+      isLoading,
       addService,
       updateService,
       deleteService,
+      refreshServices,
       cart,
       setQuantity,
       clearCart,
@@ -139,11 +163,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }),
     [
       services,
+      isLoading,
       cart,
       settings,
       addService,
       updateService,
       deleteService,
+      refreshServices,
       setQuantity,
       clearCart,
       updateSettings,

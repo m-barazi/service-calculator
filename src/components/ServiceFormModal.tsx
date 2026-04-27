@@ -3,13 +3,6 @@ import type { Service } from '../types'
 import { Modal } from './Modal'
 import { useApp } from '../hooks/useApp'
 
-interface ServiceFormModalProps {
-  open: boolean
-  onClose: () => void
-  /** If editing, the service to edit; if undefined, creating new */
-  service?: Service
-}
-
 interface FormState {
   name: string
   category: string
@@ -40,6 +33,7 @@ export function ServiceFormModal({
   const { addService, updateService, categories } = useApp()
   const [form, setForm] = useState<FormState>(empty)
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   // Reset form when service or open state changes
   useEffect(() => {
@@ -68,7 +62,7 @@ export function ServiceFormModal({
     return isNaN(n) || n < 0 ? null : n
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     const newErrors: Record<string, string> = {}
 
@@ -96,12 +90,20 @@ export function ServiceFormModal({
       visible: form.visible,
     }
 
-    if (service) {
-      updateService(service.id, payload)
-    } else {
-      addService(payload)
+    setIsSubmitting(true)
+    try {
+      if (service) {
+        await updateService(service.id, payload)
+      } else {
+        await addService(payload)
+      }
+      onClose()
+    } catch (error) {
+      console.error('Failed to save service:', error)
+      setErrors({ submit: 'Speichern fehlgeschlagen. Bitte versuche erneut.' })
+    } finally {
+      setIsSubmitting(false)
     }
-    onClose()
   }
 
   return (
@@ -125,13 +127,19 @@ export function ServiceFormModal({
             className="btn-primary"
             type="submit"
             form="service-form"
+            disabled={isSubmitting}
           >
-            {service ? 'Speichern' : 'Hinzufügen'}
+            {isSubmitting ? 'Speichere...' : service ? 'Speichern' : 'Hinzufügen'}
           </button>
         </>
       }
     >
       <form id="service-form" onSubmit={handleSubmit} className="grid gap-4">
+        {errors.submit && (
+          <div className="rounded-lg bg-danger/10 p-3 text-sm text-danger">
+            {errors.submit}
+          </div>
+        )}
         <Field label="Name" error={errors.name}>
           <input
             type="text"

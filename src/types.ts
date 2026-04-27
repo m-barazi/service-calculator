@@ -16,8 +16,8 @@ export interface Service {
   note?: string
   /** Whether this service is visible by default in the calculator */
   visible: boolean
-  createdAt: number
-  updatedAt: number
+  createdAt: number | string
+  updatedAt: number | string
 }
 
 export interface CartItem {
