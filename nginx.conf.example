@@ -1,0 +1,77 @@
+# =====================================================================
+# nginx-Konfiguration für Dienstleistungs-Kostenrechner (SPA)
+# Ablage: /etc/nginx/sites-available/kostenrechner
+# Verlinkung: /etc/nginx/sites-enabled/kostenrechner
+# =====================================================================
+
+server {
+    listen 80;
+    listen [::]:80;
+
+    # Hier deine Domain eintragen:
+    server_name kostenrechner.deine-domain.de;
+
+    root /var/www/kostenrechner;
+    index index.html;
+
+    # ---- Sicherheits-Header ----
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
+
+    # ---- Gzip-Kompression ----
+    gzip on;
+    gzip_vary on;
+    gzip_min_length 1024;
+    gzip_proxied any;
+    gzip_comp_level 6;
+    gzip_types
+        text/plain
+        text/css
+        text/xml
+        text/javascript
+        application/json
+        application/javascript
+        application/xml+rss
+        application/x-font-ttf
+        font/opentype
+        image/svg+xml;
+
+    # ---- Lange Cache-Zeiten für gehashte Vite-Assets ----
+    location /assets/ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+        try_files $uri =404;
+    }
+
+    # Fonts, Bilder
+    location ~* \.(?:ico|css|js|gif|jpe?g|png|webp|svg|woff2?|ttf|eot)$ {
+        expires 30d;
+        add_header Cache-Control "public";
+        try_files $uri =404;
+    }
+
+    # ---- index.html nicht cachen (sonst sieht der Nutzer alte Versionen) ----
+    location = /index.html {
+        add_header Cache-Control "no-cache, no-store, must-revalidate";
+        expires 0;
+    }
+
+    # ---- SPA-Fallback: alles, was keine Datei ist, nach index.html ----
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # ---- Verstecke versehentlich kopierte Dotfiles ----
+    location ~ /\.(?!well-known) {
+        deny all;
+    }
+
+    # ---- Logs ----
+    access_log /var/log/nginx/kostenrechner.access.log;
+    error_log  /var/log/nginx/kostenrechner.error.log;
+}
+
+# Nach `sudo certbot --nginx -d kostenrechner.deine-domain.de` ergänzt
+# Certbot automatisch einen zweiten Server-Block für 443 mit SSL.
