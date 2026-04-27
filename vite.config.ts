@@ -10,7 +10,7 @@ export default defineConfig({
   preview: {
     host: true,
     port: 4173,
-    allowedHosts: ['calculator.barazi.cloud'],
+    allowedHosts: 'all',
   },
   build: {
     outDir: 'dist',
