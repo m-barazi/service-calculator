@@ -1,45 +1,35 @@
 services:
   db:
-    image: postgres:16-alpine
-    container_name: service-calculator-db
+    image: ghcr.io/m-barazi/service-calculator-db:latest
     environment:
-      POSTGRES_DB: ${DB_NAME:-service_calculator}
-      POSTGRES_USER: ${DB_USER:-postgres}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD muss in .env gesetzt sein}
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./backend/init.sql:/docker-entrypoint-initdb.d/init.sql
-    # Kein Port-Mapping: DB ist nur intern erreichbar
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
       interval: 5s
       timeout: 5s
       retries: 5
     restart: unless-stopped
 
   backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: service-calculator-backend
+    image: ghcr.io/m-barazi/service-calculator-backend:latest
     environment:
-      PORT: 3000
+      PORT: "3000"
       DB_HOST: db
-      DB_PORT: 5432
-      DB_NAME: ${DB_NAME:-service_calculator}
-      DB_USER: ${DB_USER:-postgres}
-      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD muss in .env gesetzt sein}
-    # Kein Port-Mapping: Nginx proxyt intern
+      DB_PORT: "5432"
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
     depends_on:
       db:
         condition: service_healthy
     restart: unless-stopped
 
   app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: service-calculator
+    image: ghcr.io/m-barazi/service-calculator-app:latest
     ports:
       - "80:80"
     depends_on:
