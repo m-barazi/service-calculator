@@ -17,6 +17,24 @@ const INK_MUTED: [number, number, number] = [140, 140, 140]
 const BORDER: [number, number, number] = [228, 228, 228]
 const SOFT_BG: [number, number, number] = [250, 250, 249]
 
+function drawVectorLogo(
+  doc: jsPDF,
+  markX: number,
+  markY: number,
+  markSize: number,
+  INK: [number, number, number],
+  ACCENT: [number, number, number],
+) {
+  doc.setFillColor(INK[0], INK[1], INK[2])
+  doc.roundedRect(markX, markY, markSize, markSize, 8, 8, 'F')
+  doc.setDrawColor(ACCENT[0], ACCENT[1], ACCENT[2])
+  doc.setLineWidth(2.5)
+  doc.setLineCap('round')
+  doc.line(markX + 9, markY + 12, markX + 28, markY + 12)
+  doc.line(markX + 9, markY + 18, markX + 24, markY + 18)
+  doc.line(markX + 9, markY + 24, markX + 19, markY + 24)
+}
+
 export function generatePdfReport(
   totals: CartTotals,
   settings: Settings,
@@ -29,19 +47,20 @@ export function generatePdfReport(
   let y = M
 
   // ---- HEADER -----------------------------------------------
-  // Logo mark — pure SVG-style square with "lines" using vector primitives
+  // Logo mark — use uploaded company logo or fall back to vector icon
   const markX = M
   const markY = y
   const markSize = 36
-  doc.setFillColor(INK[0], INK[1], INK[2])
-  doc.roundedRect(markX, markY, markSize, markSize, 8, 8, 'F')
-  // Three lines as the logo mark
-  doc.setDrawColor(ACCENT[0], ACCENT[1], ACCENT[2])
-  doc.setLineWidth(2.5)
-  doc.setLineCap('round')
-  doc.line(markX + 9, markY + 12, markX + 28, markY + 12)
-  doc.line(markX + 9, markY + 18, markX + 24, markY + 18)
-  doc.line(markX + 9, markY + 24, markX + 19, markY + 24)
+  if (settings.companyLogo) {
+    try {
+      doc.addImage(settings.companyLogo, 'PNG', markX, markY, markSize, markSize)
+    } catch {
+      // Fallback to vector if image fails to render
+      drawVectorLogo(doc, markX, markY, markSize, INK, ACCENT)
+    }
+  } else {
+    drawVectorLogo(doc, markX, markY, markSize, INK, ACCENT)
+  }
 
   // Company name & tagline
   doc.setFont('helvetica', 'bold')

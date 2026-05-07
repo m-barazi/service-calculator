@@ -17,7 +17,7 @@ export function Layout() {
       {/* ─── Sidebar (desktop) ────────────────────────────── */}
       <aside className="sticky top-0 z-20 hidden h-screen w-64 shrink-0 border-r border-border bg-canvas/80 backdrop-blur-xl md:flex md:flex-col">
         <div className="flex items-center gap-3 px-6 py-6">
-          <Logo size={36} />
+          <Logo size={36} src={settings.companyLogo} />
           <div className="flex flex-col leading-none">
             <span className="text-[15px] font-bold tracking-tight text-ink">
               {settings.companyName || 'Kostenrechner'}
@@ -96,7 +96,7 @@ export function Layout() {
       {/* ─── Mobile top bar ─────────────────────────────── */}
       <header className="sticky top-0 z-20 flex items-center justify-between border-b border-border bg-canvas/85 px-5 py-3 backdrop-blur-xl md:hidden">
         <div className="flex items-center gap-2.5">
-          <Logo size={32} />
+          <Logo size={32} src={settings.companyLogo} />
           <span className="text-sm font-bold tracking-tight">
             {settings.companyName || 'Kostenrechner'}
           </span>

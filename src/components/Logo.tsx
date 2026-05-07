@@ -1,9 +1,21 @@
 interface LogoProps {
   size?: number
   className?: string
+  src?: string
 }
 
-export function Logo({ size = 32, className = '' }: LogoProps) {
+export function Logo({ size = 32, className = '', src }: LogoProps) {
+  if (src) {
+    return (
+      <img
+        src={src}
+        alt="Logo"
+        className={`inline-block rounded-xl object-cover ${className}`}
+        style={{ width: size, height: size }}
+      />
+    )
+  }
+
   return (
     <div
       className={`inline-flex items-center justify-center rounded-xl bg-ink ${className}`}

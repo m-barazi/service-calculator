@@ -2,17 +2,20 @@ import { useRef, useState } from 'react'
 import {
   Building2,
   Download,
+  ImagePlus,
   Monitor,
   Moon,
   Percent,
   RotateCcw,
   Sun,
+  Trash2,
   Upload,
 } from 'lucide-react'
 import { useApp } from '../hooks/useApp'
 import { exportAll, importAll, type BackupPayload } from '../lib/storage'
 import { formatDate } from '../lib/format'
 import { ConfirmDialog } from '../components/ConfirmDialog'
+import { Logo } from '../components/Logo'
 
 export function SettingsPage() {
   const { settings, updateSettings } = useApp()
@@ -25,6 +28,28 @@ export function SettingsPage() {
 
   // ----- VAT slider state (percent, integer) -----
   const vatPct = Math.round(settings.vatRate * 100)
+
+  // ----- Logo upload -----
+  const logoInputRef = useRef<HTMLInputElement>(null)
+
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 512 * 1024) {
+      alert('Bild zu groß. Bitte wähle ein Bild unter 512 KB.')
+      return
+    }
+    const reader = new FileReader()
+    reader.onload = () => {
+      updateSettings({ companyLogo: reader.result as string })
+    }
+    reader.readAsDataURL(file)
+    if (logoInputRef.current) logoInputRef.current.value = ''
+  }
+
+  const handleLogoRemove = () => {
+    updateSettings({ companyLogo: undefined })
+  }
 
   // ----- Export -----
   const handleExport = () => {
@@ -196,6 +221,46 @@ export function SettingsPage() {
               placeholder="Dienstleistungen & Print"
             />
           </label>
+        </div>
+
+        {/* Logo upload */}
+        <div className="mt-5 flex items-center gap-4">
+          <div className="shrink-0">
+            <Logo size={64} src={settings.companyLogo} />
+          </div>
+          <div className="flex-1">
+            <p className="text-sm font-medium text-ink">Firmenlogo</p>
+            <p className="text-2xs text-ink-soft">
+              PNG, JPG, SVG oder WebP — max. 512 KB
+            </p>
+            <div className="mt-2 flex gap-2">
+              <button
+                type="button"
+                onClick={() => logoInputRef.current?.click()}
+                className="btn-secondary text-xs"
+              >
+                <ImagePlus className="size-3.5" />
+                Bild wählen
+              </button>
+              {settings.companyLogo && (
+                <button
+                  type="button"
+                  onClick={handleLogoRemove}
+                  className="btn-danger text-xs"
+                >
+                  <Trash2 className="size-3.5" />
+                  Entfernen
+                </button>
+              )}
+            </div>
+            <input
+              ref={logoInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/svg+xml,image/webp"
+              className="hidden"
+              onChange={handleLogoUpload}
+            />
+          </div>
         </div>
       </section>
 

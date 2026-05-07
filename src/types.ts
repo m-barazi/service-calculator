@@ -35,6 +35,8 @@ export interface Settings {
   theme: 'light' | 'dark' | 'system'
   /** Optional accent color override (CSS color) - reserved for future use */
   accent?: string
+  /** Optional company logo as Base64 data URL */
+  companyLogo?: string
 }
 
 // ===== Computation types =====
