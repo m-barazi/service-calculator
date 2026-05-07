@@ -1,0 +1,7 @@
+node_modules
+dist
+.git
+.env
+*.tar.gz
+.DS_Store
+.claude
