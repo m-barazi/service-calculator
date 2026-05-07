@@ -10,6 +10,7 @@ interface ConfirmDialogProps {
   confirmLabel?: string
   cancelLabel?: string
   variant?: 'danger' | 'default'
+  disabled?: boolean
 }
 
 export function ConfirmDialog({
@@ -21,6 +22,7 @@ export function ConfirmDialog({
   confirmLabel = 'Bestätigen',
   cancelLabel = 'Abbrechen',
   variant = 'default',
+  disabled = false,
 }: ConfirmDialogProps) {
   return (
     <Modal
@@ -37,6 +39,7 @@ export function ConfirmDialog({
               onConfirm()
               onClose()
             }}
+            disabled={disabled}
             className={
               variant === 'danger'
                 ? 'btn bg-danger text-white hover:bg-danger/90'

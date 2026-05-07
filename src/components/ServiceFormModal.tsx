@@ -3,6 +3,12 @@ import type { Service } from '../types'
 import { Modal } from './Modal'
 import { useApp } from '../hooks/useApp'
 
+interface ServiceFormModalProps {
+  open: boolean
+  onClose: () => void
+  service?: Service
+}
+
 interface FormState {
   name: string
   category: string
