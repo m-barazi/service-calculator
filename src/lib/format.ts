@@ -65,3 +65,9 @@ export function parseGermanNumber(input: string): number {
   const n = parseFloat(cleaned)
   return isNaN(n) ? 0 : n
 }
+
+/** Format a number for use in price input fields (German locale, 2 decimals) */
+export function formatPriceInput(n: number): string {
+  if (!isFinite(n)) return '0,00'
+  return n.toFixed(2).replace('.', ',')
+}
