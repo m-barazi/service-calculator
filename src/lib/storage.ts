@@ -66,17 +66,32 @@ export function saveSettings(settings: Settings): void {
 
 // ===== Cart =====
 
-export function loadCart(): Record<string, number> {
+export function loadCart(): Record<string, { quantity: number; note: string }> {
   try {
     const raw = localStorage.getItem(KEYS.cart)
     if (!raw) return {}
-    return JSON.parse(raw) as Record<string, number>
+    const parsed = JSON.parse(raw)
+    // Migrate from old format (quantity-only) to new format
+    const result: Record<string, { quantity: number; note: string }> = {}
+    for (const [key, value] of Object.entries(parsed)) {
+      if (typeof value === 'number') {
+        // Old format: { serviceId: quantity }
+        result[key] = { quantity: value, note: '' }
+      } else if (typeof value === 'object' && value !== null) {
+        // New format: { serviceId: { quantity, note } }
+        result[key] = {
+          quantity: (value as any).quantity ?? 0,
+          note: (value as any).note ?? '',
+        }
+      }
+    }
+    return result
   } catch {
     return {}
   }
 }
 
-export function saveCart(cart: Record<string, number>): void {
+export function saveCart(cart: Record<string, { quantity: number; note: string }>): void {
   try {
     localStorage.setItem(KEYS.cart, JSON.stringify(cart))
   } catch {

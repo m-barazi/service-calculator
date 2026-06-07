@@ -35,9 +35,10 @@ interface AppState {
   deleteService: (id: string) => Promise<void>
   refreshServices: () => Promise<void>
 
-  // Cart (serviceId → quantity)
-  cart: Record<string, number>
+  // Cart (serviceId → { quantity, note })
+  cart: Record<string, { quantity: number; note: string }>
   setQuantity: (serviceId: string, quantity: number) => void
+  setNote: (serviceId: string, note: string) => void
   clearCart: () => void
   cartItemCount: number
   cartLineCount: number
@@ -62,7 +63,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true)
   const [categories, setCategories] = useState<Category[]>([])
   const [isLoadingCategories, setIsLoadingCategories] = useState(true)
-  const [cart, setCart] = useState<Record<string, number>>(() => loadCart())
+  const [cart, setCart] = useState<Record<string, { quantity: number; note: string }>>(() => loadCart())
   const [settings, setSettings] = useState<Settings>(() => loadSettings())
 
   // Apply theme
@@ -167,7 +168,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const next = { ...prev }
       const q = Math.max(0, Math.floor(quantity))
       if (q <= 0) delete next[serviceId]
-      else next[serviceId] = q
+      else next[serviceId] = { quantity: q, note: prev[serviceId]?.note ?? '' }
+      return next
+    })
+  }, [])
+
+  const setNote = useCallback((serviceId: string, note: string) => {
+    setCart((prev) => {
+      const next = { ...prev }
+      if (next[serviceId]) {
+        next[serviceId] = { ...next[serviceId], note }
+      }
       return next
     })
   }, [])
@@ -180,7 +191,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const cartItemCount = useMemo(
-    () => Object.values(cart).reduce((s, q) => s + q, 0),
+    () => Object.values(cart).reduce((s, entry) => s + entry.quantity, 0),
     [cart],
   )
   const cartLineCount = useMemo(() => Object.keys(cart).length, [cart])
@@ -195,6 +206,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       refreshServices,
       cart,
       setQuantity,
+      setNote,
       clearCart,
       cartItemCount,
       cartLineCount,
@@ -217,6 +229,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       deleteService,
       refreshServices,
       setQuantity,
+      setNote,
       clearCart,
       updateSettings,
       cartItemCount,

@@ -64,9 +64,10 @@ export function CalculatorPage() {
   // Totals
   const cartItems = useMemo(
     () =>
-      Object.entries(cart).map(([serviceId, quantity]) => ({
+      Object.entries(cart).map(([serviceId, entry]) => ({
         serviceId,
-        quantity,
+        quantity: entry.quantity,
+        note: entry.note,
       })),
     [cart],
   )
@@ -202,7 +203,7 @@ export function CalculatorPage() {
                         <ServiceRow
                           key={s.id}
                           service={s}
-                          quantity={cart[s.id] ?? 0}
+                          quantity={cart[s.id]?.quantity ?? 0}
                           onChangeQuantity={(q) => setQuantity(s.id, q)}
                           showPrices={showPrices}
                           categoryName={cat.name}

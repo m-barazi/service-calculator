@@ -35,6 +35,7 @@ export interface Category {
 export interface CartItem {
   serviceId: string
   quantity: number
+  note: string
 }
 
 export interface Settings {
@@ -56,6 +57,7 @@ export interface Settings {
 export interface LineComputation {
   service: Service
   quantity: number
+  note: string
   /** purchasePrice * quantity */
   totalCostNet: number
   totalCostGross: number

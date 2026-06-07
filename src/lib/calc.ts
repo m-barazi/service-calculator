@@ -4,7 +4,7 @@ export function computeLine(
   service: Service,
   quantity: number,
   vatRate: number,
-): LineComputation {
+): Omit<LineComputation, 'note'> {
   const safeQty = Math.max(0, quantity)
   const totalCostNet = service.purchasePrice * safeQty
   const totalCostGross = totalCostNet * (1 + vatRate)
@@ -37,7 +37,10 @@ export function computeCart(
     if (item.quantity <= 0) continue
     const svc = serviceMap.get(item.serviceId)
     if (!svc) continue
-    lines.push(computeLine(svc, item.quantity, vatRate))
+    lines.push({
+      ...computeLine(svc, item.quantity, vatRate),
+      note: item.note,
+    })
   }
 
   const totalCostNet = lines.reduce((s, l) => s + l.totalCostNet, 0)
