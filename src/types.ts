@@ -3,7 +3,7 @@
 export interface Service {
   id: string
   name: string
-  category: string
+  categoryId: string
   /** Einkaufspreis netto — what the company pays for one unit */
   purchasePrice: number
   /** Verkaufspreis netto — what the company charges per unit */
@@ -15,6 +15,18 @@ export interface Service {
   /** Free-form note (e.g. dimensions, material specs) */
   note?: string
   /** Whether this service is visible by default in the calculator */
+  visible: boolean
+  createdAt: number | string
+  updatedAt: number | string
+}
+
+export interface Category {
+  id: string
+  name: string
+  description?: string
+  icon?: string
+  color?: string
+  sortOrder: number
   visible: boolean
   createdAt: number | string
   updatedAt: number | string
