@@ -7,18 +7,22 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import type { Service, Settings } from '../types'
+import type { Service, Settings, Category } from '../types'
 import {
   loadCart,
   loadSettings,
   saveCart,
   saveSettings,
 } from '../lib/storage'
-import { 
-  fetchServices, 
-  createService, 
-  updateService as updateServiceApi, 
-  deleteService as apiDeleteService 
+import {
+  fetchServices,
+  createService,
+  updateService as updateServiceApi,
+  deleteService as apiDeleteService,
+  fetchCategories,
+  createCategory,
+  updateCategory as updateCategoryApi,
+  deleteCategory as deleteCategoryApi,
 } from '../lib/api'
 import { useTheme } from './useTheme'
 
@@ -42,8 +46,13 @@ interface AppState {
   settings: Settings
   updateSettings: (patch: Partial<Settings>) => void
 
-  // Categories (derived)
-  categories: string[]
+  // Categories (loaded from API)
+  categories: Category[]
+  isLoadingCategories: boolean
+  addCategory: (c: Omit<Category, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>
+  updateCategory: (id: string, patch: Partial<Category>) => Promise<void>
+  deleteCategory: (id: string) => Promise<void>
+  refreshCategories: () => Promise<void>
 }
 
 const AppContext = createContext<AppState | null>(null)
@@ -51,22 +60,29 @@ const AppContext = createContext<AppState | null>(null)
 export function AppProvider({ children }: { children: ReactNode }) {
   const [services, setServices] = useState<Service[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [categories, setCategories] = useState<Category[]>([])
+  const [isLoadingCategories, setIsLoadingCategories] = useState(true)
   const [cart, setCart] = useState<Record<string, number>>(() => loadCart())
   const [settings, setSettings] = useState<Settings>(() => loadSettings())
 
   // Apply theme
   useTheme(settings.theme)
 
-  // Load services from API on mount
+  // Load services and categories from API on mount
   useEffect(() => {
     const load = async () => {
       try {
-        const data = await fetchServices()
-        setServices(data)
+        const [servicesData, categoriesData] = await Promise.all([
+          fetchServices(),
+          fetchCategories(),
+        ])
+        setServices(servicesData)
+        setCategories(categoriesData)
       } catch (error) {
-        console.error('Failed to load services from API:', error)
+        console.error('Failed to load data:', error)
       } finally {
         setIsLoading(false)
+        setIsLoadingCategories(false)
       }
     }
     load()
@@ -115,6 +131,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
     })
   }, [])
 
+  // ---- Category operations ----
+  const addCategory = useCallback(
+    async (c: Omit<Category, 'id' | 'createdAt' | 'updatedAt'>) => {
+      const created = await createCategory(c)
+      setCategories((prev) => [...prev, created].sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name)))
+    },
+    [],
+  )
+
+  const updateCategory = useCallback(async (id: string, patch: Partial<Category>) => {
+    const updated = await updateCategoryApi(id, patch)
+    setCategories((prev) =>
+      prev.map((c) => (c.id === id ? updated : c)),
+    )
+  }, [])
+
+  const deleteCategory = useCallback(async (id: string) => {
+    await deleteCategoryApi(id)
+    setCategories((prev) => prev.filter((c) => c.id !== id))
+  }, [])
+
+  const refreshCategories = useCallback(async () => {
+    try {
+      const data = await fetchCategories()
+      setCategories(data)
+    } catch (error) {
+      console.error('Failed to refresh categories:', error)
+    }
+  }, [])
+
   // ---- Cart operations ----
   const setQuantity = useCallback((serviceId: string, quantity: number) => {
     setCart((prev) => {
@@ -139,11 +185,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   )
   const cartLineCount = useMemo(() => Object.keys(cart).length, [cart])
 
-  const categories = useMemo(() => {
-    const set = new Set(services.map((s) => s.category).filter(Boolean))
-    return Array.from(set).sort()
-  }, [services])
-
   const value = useMemo<AppState>(
     () => ({
       services,
@@ -160,6 +201,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       settings,
       updateSettings,
       categories,
+      isLoadingCategories,
+      addCategory,
+      updateCategory,
+      deleteCategory,
+      refreshCategories,
     }),
     [
       services,
@@ -176,6 +222,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       cartItemCount,
       cartLineCount,
       categories,
+      isLoadingCategories,
+      addCategory,
+      updateCategory,
+      deleteCategory,
+      refreshCategories,
     ],
   )
 
