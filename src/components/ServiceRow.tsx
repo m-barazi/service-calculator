@@ -1,4 +1,5 @@
-import { ExternalLink, FileText } from 'lucide-react'
+import { useState } from 'react'
+import { ExternalLink, FileText, StickyNote } from 'lucide-react'
 import type { Service } from '../types'
 import { formatEUR } from '../lib/format'
 import { QuantityStepper } from './QuantityStepper'
@@ -11,6 +12,8 @@ interface ServiceRowProps {
   categoryName?: string
   categoryColor?: string
   categoryIcon?: string
+  note?: string
+  onChangeNote?: (note: string) => void
 }
 
 export function ServiceRow({
@@ -21,7 +24,10 @@ export function ServiceRow({
   categoryName,
   categoryColor,
   categoryIcon,
+  note,
+  onChangeNote,
 }: ServiceRowProps) {
+  const [showNote, setShowNote] = useState(false)
   const isActive = quantity > 0
   const lineTotal = service.salePrice * quantity
 
@@ -106,6 +112,38 @@ export function ServiceRow({
           </span>
         </div>
       </div>
+
+      {/* Note toggle + inline field */}
+      {(showNote || note) ? (
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowNote(!showNote)}
+            className={[
+              'qty-btn shrink-0',
+              note ? 'text-accent' : 'text-ink-muted',
+            ].join(' ')}
+            title={note ? 'Notiz bearbeiten' : 'Notiz hinzufügen'}
+          >
+            <StickyNote className="h-3.5 w-3.5" />
+          </button>
+          <input
+            type="text"
+            value={note ?? ''}
+            onChange={(e) => onChangeNote?.(e.target.value)}
+            placeholder="z.B. für mustermax.de"
+            maxLength={100}
+            className="input flex-1 text-sm"
+          />
+        </div>
+      ) : (
+        <button
+          onClick={() => setShowNote(true)}
+          className="qty-btn text-ink-muted"
+          title="Notiz hinzufügen"
+        >
+          <StickyNote className="h-3.5 w-3.5" />
+        </button>
+      )}
     </div>
   )
 }
