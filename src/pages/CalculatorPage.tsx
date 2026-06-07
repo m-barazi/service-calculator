@@ -12,6 +12,7 @@ export function CalculatorPage() {
     services,
     cart,
     setQuantity,
+    setNote,
     clearCart,
     settings,
     cartLineCount,
@@ -209,6 +210,8 @@ export function CalculatorPage() {
                           categoryName={cat.name}
                           categoryColor={cat.color}
                           categoryIcon={cat.icon}
+                          note={cart[s.id]?.note ?? ''}
+                          onChangeNote={(note) => setNote(s.id, note)}
                         />
                       ))}
                     </div>

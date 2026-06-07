@@ -4,6 +4,7 @@ import type { CartTotals, Settings } from '../types'
 import { formatEUR, formatPct } from '../lib/format'
 import { generatePdfReport } from '../lib/pdf'
 import { Modal } from './Modal'
+import { useApp } from '../hooks/useApp'
 
 interface DetailsModalProps {
   open: boolean
@@ -18,6 +19,7 @@ export function DetailsModal({
   totals,
   settings,
 }: DetailsModalProps) {
+  const { setNote, categories } = useApp()
   const [customerName, setCustomerName] = useState('')
   const [projectTitle, setProjectTitle] = useState('Kostenvoranschlag')
   const [notes, setNotes] = useState('')
@@ -147,8 +149,23 @@ export function DetailsModal({
                       {line.service.name}
                     </p>
                     <p className="text-2xs text-ink-muted">
-                      {line.service.categoryId}
+                      {categories.find(c => c.id === line.service.categoryId)?.name ?? ''}
                     </p>
+                    {line.note && (
+                      <p className="mt-0.5 text-2xs italic text-ink-muted">
+                        {line.note}
+                      </p>
+                    )}
+                    <div className="mt-1">
+                      <input
+                        type="text"
+                        value={line.note ?? ''}
+                        onChange={(e) => setNote(line.service.id, e.target.value)}
+                        placeholder="Notiz hinzufügen…"
+                        maxLength={100}
+                        className="input w-full text-xs py-1"
+                      />
+                    </div>
                   </div>
                   <div className="text-right">
                     <span className="num text-sm font-medium text-ink">

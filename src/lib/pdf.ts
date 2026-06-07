@@ -110,13 +110,25 @@ export function generatePdfReport(
   y += 18
 
   // ---- TABLE ------------------------------------------------
-  const rows = totals.lines.map((l) => [
-    l.service.name,
-    String(l.quantity),
-    formatEUR(l.service.salePrice),
-    formatEUR(l.totalSaleNet),
-    formatEUR(l.totalSaleGross),
-  ])
+  const rows: (string | { content: string; styles: Record<string, unknown> })[][] = []
+  for (const l of totals.lines) {
+    rows.push([
+      l.service.name,
+      String(l.quantity),
+      formatEUR(l.service.salePrice),
+      formatEUR(l.totalSaleNet),
+      formatEUR(l.totalSaleGross),
+    ])
+    if (l.note && l.note.trim()) {
+      rows.push([
+        { content: l.note, styles: { fontStyle: 'italic', fontSize: 8, textColor: INK_SOFT } },
+        { content: '', styles: { fontSize: 8 } },
+        { content: '', styles: { fontSize: 8 } },
+        { content: '', styles: { fontSize: 8 } },
+        { content: '', styles: { fontSize: 8 } },
+      ])
+    }
+  }
 
   autoTable(doc, {
     head: [['Leistung', 'Menge', 'Einzelpreis', 'Netto', 'Brutto']],
