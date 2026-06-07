@@ -160,36 +160,62 @@ export function CalculatorPage() {
             )}
           </div>
 
-          {/* Service rows */}
-          <div className="stagger flex flex-col gap-2.5">
-            {filtered.length === 0 ? (
-              <div className="card flex flex-col items-center justify-center gap-2 p-12 text-center">
-                <p className="text-sm font-medium text-ink">
-                  Keine Leistungen gefunden
-                </p>
-                <p className="text-2xs text-ink-muted">
-                  Passe die Suche oder Kategorie an, oder füge eine neue
-                  Leistung in der Preisliste hinzu.
-                </p>
-              </div>
-            ) : (
-              filtered.map((s) => {
-                const cat = allCategories.find(c => c.id === s.categoryId)
-                return (
-                  <ServiceRow
-                    key={s.id}
-                    service={s}
-                    quantity={cart[s.id] ?? 0}
-                    onChangeQuantity={(q) => setQuantity(s.id, q)}
-                    showPrices={showPrices}
-                    categoryName={cat?.name}
-                    categoryColor={cat?.color}
-                    categoryIcon={cat?.icon}
-                  />
+          {/* Service rows — grouped by category */}
+          {filtered.length === 0 ? (
+            <div className="card flex flex-col items-center justify-center gap-2 p-12 text-center">
+              <p className="text-sm font-medium text-ink">
+                Keine Leistungen gefunden
+              </p>
+              <p className="text-2xs text-ink-muted">
+                Passe die Suche oder Kategorie an, oder füge eine neue
+                Leistung in der Preisliste hinzu.
+              </p>
+            </div>
+          ) : (
+            <div className="stagger flex flex-col gap-4">
+              {displayCategories.map((cat) => {
+                const catServices = filtered.filter(
+                  (s) => s.categoryId === cat.id,
                 )
-              })
-            )}
-          </div>
+                if (catServices.length === 0) return null
+                return (
+                  <div key={cat.id}>
+                    <div className="flex items-center gap-2 pt-2 pb-1">
+                      {cat.icon && (
+                        <span className="text-lg">{cat.icon}</span>
+                      )}
+                      <h2 className="text-sm font-semibold text-ink">
+                        {cat.name}
+                      </h2>
+                      {cat.color && (
+                        <span
+                          className="h-2.5 w-2.5 rounded-full"
+                          style={{ backgroundColor: cat.color }}
+                        />
+                      )}
+                      <span className="text-2xs text-ink-muted">
+                        ({catServices.length})
+                      </span>
+                    </div>
+                    <div className="flex flex-col gap-2.5">
+                      {catServices.map((s) => (
+                        <ServiceRow
+                          key={s.id}
+                          service={s}
+                          quantity={cart[s.id] ?? 0}
+                          onChangeQuantity={(q) => setQuantity(s.id, q)}
+                          showPrices={showPrices}
+                          categoryName={cat.name}
+                          categoryColor={cat.color}
+                          categoryIcon={cat.icon}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
 
           {/* Bottom hint */}
           {visibleServices.length === 0 && (
