@@ -15,12 +15,15 @@ const DEFAULT_SETTINGS: Settings = {
 }
 
 // ===== Services =====
+// NOTE: The app loads services from the API (useApp hook). These localStorage
+// functions are only used by the export/import backup feature. The seed data
+// has empty categoryId strings — real category IDs come from the API.
 
 export function loadServices(): Service[] {
   try {
     const raw = localStorage.getItem(KEYS.services)
     if (!raw) {
-      // First run — seed from CSV import
+      // First run — seed with fallback data (categoryId will be empty strings)
       saveServices(seedServices)
       return seedServices
     }
