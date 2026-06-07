@@ -112,22 +112,16 @@ export function generatePdfReport(
   // ---- TABLE ------------------------------------------------
   const rows: (string | { content: string; styles: Record<string, unknown> })[][] = []
   for (const l of totals.lines) {
+    const nameCell = l.note && l.note.trim()
+      ? { content: `${l.service.name}\n${l.note}`, styles: { fontStyle: 'normal' } }
+      : l.service.name
     rows.push([
-      l.service.name,
+      nameCell,
       String(l.quantity),
       formatEUR(l.service.salePrice),
       formatEUR(l.totalSaleNet),
       formatEUR(l.totalSaleGross),
     ])
-    if (l.note && l.note.trim()) {
-      rows.push([
-        { content: l.note, styles: { fontStyle: 'italic', fontSize: 8, textColor: INK_SOFT } },
-        { content: '', styles: { fontSize: 8 } },
-        { content: '', styles: { fontSize: 8 } },
-        { content: '', styles: { fontSize: 8 } },
-        { content: '', styles: { fontSize: 8 } },
-      ])
-    }
   }
 
   autoTable(doc, {
@@ -161,7 +155,6 @@ export function generatePdfReport(
     },
     didDrawCell: (data) => {
       if (data.section === 'head') {
-        // Underline for header row
         const { x, y: cy, height } = data.cell
         doc.setDrawColor(BORDER[0], BORDER[1], BORDER[2])
         doc.setLineWidth(0.5)
