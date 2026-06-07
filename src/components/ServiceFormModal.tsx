@@ -8,6 +8,7 @@ interface ServiceFormModalProps {
   open: boolean
   onClose: () => void
   service?: Service
+  cloneFrom?: Service
 }
 
 interface FormState {
@@ -52,6 +53,7 @@ export function ServiceFormModal({
   open,
   onClose,
   service,
+  cloneFrom,
 }: ServiceFormModalProps) {
   const { addService, updateService, categories, settings } = useApp()
   const vatRate = settings.vatRate
@@ -61,32 +63,35 @@ export function ServiceFormModal({
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  // Reset form when service or open state changes
+  // Determine the source for pre-filling the form
+  const prefillSource = service ?? cloneFrom
+
+  // Reset form when service/clone/open state changes
   useEffect(() => {
     if (!open) return
-    if (service) {
-      const purchaseNet = service.purchasePrice
-      const saleNet = service.salePrice
+    if (prefillSource) {
+      const purchaseNet = prefillSource.purchasePrice
+      const saleNet = prefillSource.salePrice
       const profitNet = saleNet - purchaseNet
       setForm({
-        name: service.name,
-        categoryId: service.categoryId,
+        name: cloneFrom ? `${prefillSource.name} (Kopie)` : prefillSource.name,
+        categoryId: prefillSource.categoryId,
         purchasePriceStr: formatPriceInput(purchaseNet),
         purchaseGrossStr: formatPriceInput(purchaseNet * vatFactor),
         salePriceStr: formatPriceInput(saleNet),
         saleGrossStr: formatPriceInput(saleNet * vatFactor),
         profitNetStr: formatPriceInput(profitNet),
         profitGrossStr: formatPriceInput(profitNet * vatFactor),
-        defaultQuantity: service.defaultQuantity,
-        url: service.url ?? '',
-        note: service.note ?? '',
-        visible: service.visible,
+        defaultQuantity: prefillSource.defaultQuantity,
+        url: prefillSource.url ?? '',
+        note: prefillSource.note ?? '',
+        visible: prefillSource.visible,
       })
     } else {
       setForm(empty)
     }
     setErrors({})
-  }, [service, open, vatFactor])
+  }, [service, cloneFrom, open, vatFactor])
 
   /** Update dependent price fields based on which field changed */
   const handlePriceChange = (
@@ -177,11 +182,13 @@ export function ServiceFormModal({
     <Modal
       open={open}
       onClose={onClose}
-      title={service ? 'Leistung bearbeiten' : 'Neue Leistung'}
+      title={service ? 'Leistung bearbeiten' : cloneFrom ? 'Leistung klonen' : 'Neue Leistung'}
       description={
         service
           ? 'Aktualisiere Preise und Details.'
-          : 'Füge eine neue Dienstleistung zur Preisliste hinzu.'
+          : cloneFrom
+            ? 'Erstelle eine Kopie dieser Leistung.'
+            : 'Füge eine neue Dienstleistung zur Preisliste hinzu.'
       }
       size="lg"
       footer={

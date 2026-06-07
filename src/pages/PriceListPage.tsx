@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import {
+  Copy,
   Eye,
   EyeOff,
   Pencil,
@@ -19,6 +20,7 @@ export function PriceListPage() {
   const [search, setSearch] = useState('')
   const [activeCategory, setActiveCategory] = useState<string | null>(null)
   const [editing, setEditing] = useState<Service | undefined>(undefined)
+  const [cloning, setCloning] = useState<Service | undefined>(undefined)
   const [creating, setCreating] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState<Service | undefined>(
     undefined,
@@ -243,6 +245,13 @@ export function PriceListPage() {
                     <Pencil className="h-3.5 w-3.5" />
                   </button>
                   <button
+                    onClick={() => setCloning(s)}
+                    className="qty-btn"
+                    title="Klonen"
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                  </button>
+                  <button
                     onClick={() => setConfirmDelete(s)}
                     className="qty-btn text-danger hover:bg-danger/10"
                     title="Löschen"
@@ -287,6 +296,13 @@ export function PriceListPage() {
                     aria-label="Bearbeiten"
                   >
                     <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    onClick={() => setCloning(s)}
+                    className="qty-btn"
+                    aria-label="Klonen"
+                  >
+                    <Copy className="h-3.5 w-3.5" />
                   </button>
                   <button
                     onClick={() => setConfirmDelete(s)}
@@ -368,6 +384,11 @@ export function PriceListPage() {
         open={!!editing}
         onClose={() => setEditing(undefined)}
         service={editing}
+      />
+      <ServiceFormModal
+        open={!!cloning}
+        onClose={() => setCloning(undefined)}
+        cloneFrom={cloning}
       />
       <ConfirmDialog
         open={!!confirmDelete}
