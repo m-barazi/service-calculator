@@ -147,7 +147,7 @@ export function DetailsModal({
                       {line.service.name}
                     </p>
                     <p className="text-2xs text-ink-muted">
-                      {line.service.category}
+                      {line.service.categoryId}
                     </p>
                   </div>
                   <div className="text-right">

@@ -15,7 +15,7 @@ const now = Date.now()
 function svc(
   id: string,
   name: string,
-  category: string,
+  categoryId: string,
   purchasePrice: number,
   salePrice: number,
   defaultQuantity = 1,
@@ -26,7 +26,7 @@ function svc(
   return {
     id,
     name,
-    category,
+    categoryId,
     purchasePrice,
     salePrice,
     defaultQuantity,

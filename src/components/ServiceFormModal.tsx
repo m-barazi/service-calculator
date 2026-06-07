@@ -12,7 +12,7 @@ interface ServiceFormModalProps {
 
 interface FormState {
   name: string
-  category: string
+  categoryId: string
   purchasePriceStr: string
   purchaseGrossStr: string
   salePriceStr: string
@@ -27,7 +27,7 @@ interface FormState {
 
 const empty: FormState = {
   name: '',
-  category: '',
+  categoryId: '',
   purchasePriceStr: '0',
   purchaseGrossStr: '0',
   salePriceStr: '0',
@@ -70,7 +70,7 @@ export function ServiceFormModal({
       const profitNet = saleNet - purchaseNet
       setForm({
         name: service.name,
-        category: service.category,
+        categoryId: service.categoryId,
         purchasePriceStr: formatPriceInput(purchaseNet),
         purchaseGrossStr: formatPriceInput(purchaseNet * vatFactor),
         salePriceStr: formatPriceInput(saleNet),
@@ -134,7 +134,7 @@ export function ServiceFormModal({
     const newErrors: Record<string, string> = {}
 
     if (!form.name.trim()) newErrors.name = 'Name ist erforderlich'
-    if (!form.category.trim()) newErrors.category = 'Kategorie ist erforderlich'
+    if (!form.categoryId.trim()) newErrors.categoryId = 'Kategorie ist erforderlich'
 
     const purchase = parsePrice(form.purchasePriceStr)
     if (purchase === null) newErrors.purchasePriceStr = 'Ungültiger Preis'
@@ -148,7 +148,7 @@ export function ServiceFormModal({
 
     const payload = {
       name: form.name.trim(),
-      category: form.category.trim(),
+      categoryId: form.categoryId,
       purchasePrice: purchase ?? 0,
       salePrice: sale ?? 0,
       defaultQuantity: Math.max(1, form.defaultQuantity),
@@ -218,20 +218,17 @@ export function ServiceFormModal({
           />
         </Field>
 
-        <Field label="Kategorie" error={errors.category}>
-          <input
-            type="text"
-            value={form.category}
-            onChange={(e) => setForm({ ...form, category: e.target.value })}
-            placeholder="z.B. Print & Marketing"
-            list="categories-list"
+        <Field label="Kategorie" error={errors.categoryId}>
+          <select
+            value={form.categoryId}
+            onChange={(e) => setForm({ ...form, categoryId: e.target.value })}
             className="input w-full"
-          />
-          <datalist id="categories-list">
-            {categories.map((c) => (
-              <option key={c} value={c} />
+          >
+            <option value="">Kategorie wählen…</option>
+            {categories.filter(c => c.visible).map(c => (
+              <option key={c.id} value={c.id}>{c.icon ? `${c.icon} ` : ''}{c.name}</option>
             ))}
-          </datalist>
+          </select>
         </Field>
 
         {/* ── Price grid (3 rows × 2 columns) ── */}

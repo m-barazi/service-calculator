@@ -8,6 +8,9 @@ interface ServiceRowProps {
   quantity: number
   onChangeQuantity: (q: number) => void
   showPrices: boolean
+  categoryName?: string
+  categoryColor?: string
+  categoryIcon?: string
 }
 
 export function ServiceRow({
@@ -15,6 +18,9 @@ export function ServiceRow({
   quantity,
   onChangeQuantity,
   showPrices,
+  categoryName,
+  categoryColor,
+  categoryIcon,
 }: ServiceRowProps) {
   const isActive = quantity > 0
   const lineTotal = service.salePrice * quantity
@@ -56,7 +62,12 @@ export function ServiceRow({
           )}
         </div>
         <div className="mt-1 flex items-center gap-2 flex-wrap text-2xs">
-          <span className="badge-neutral">{service.category}</span>
+          <span
+            className="badge-neutral"
+            style={categoryColor ? { backgroundColor: categoryColor + '20', color: categoryColor, borderColor: categoryColor + '40' } : undefined}
+          >
+            {categoryIcon ? `${categoryIcon} ` : ''}{categoryName ?? service.categoryId}
+          </span>
           {service.note && (
             <span className="inline-flex items-center gap-1 text-ink-muted">
               <FileText className="h-3 w-3" />

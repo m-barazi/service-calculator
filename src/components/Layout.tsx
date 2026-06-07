@@ -1,10 +1,11 @@
 import { NavLink, Outlet } from 'react-router-dom'
-import { Calculator, Receipt, Settings as SettingsIcon, Sun, Moon, Monitor } from 'lucide-react'
+import { Calculator, Receipt, Settings as SettingsIcon, Sun, Moon, Monitor, Tags } from 'lucide-react'
 import { Logo } from './Logo'
 import { useApp } from '../hooks/useApp'
 
 const NAV = [
   { to: '/', icon: Calculator, label: 'Rechner', end: true },
+  { to: '/kategorien', icon: Tags, label: 'Kategorien' },
   { to: '/preisliste', icon: Receipt, label: 'Preisliste' },
   { to: '/einstellungen', icon: SettingsIcon, label: 'Einstellungen' },
 ]
@@ -131,7 +132,7 @@ export function Layout() {
       </main>
 
       {/* ─── Mobile bottom nav ──────────────────────────── */}
-      <nav className="fixed bottom-0 left-0 right-0 z-30 grid grid-cols-3 border-t border-border bg-canvas/90 backdrop-blur-xl pb-safe md:hidden">
+      <nav className="fixed bottom-0 left-0 right-0 z-30 grid grid-cols-4 border-t border-border bg-canvas/90 backdrop-blur-xl pb-safe md:hidden">
         {NAV.map(({ to, icon: Icon, label, end }) => (
           <NavLink
             key={to}

@@ -15,6 +15,7 @@ export function CalculatorPage() {
     clearCart,
     settings,
     cartLineCount,
+    categories: allCategories,
   } = useApp()
 
   const [search, setSearch] = useState('')
@@ -28,22 +29,33 @@ export function CalculatorPage() {
     [services],
   )
 
-  const categories = useMemo(() => {
+  const categoryMap = useMemo(() => {
     const map = new Map<string, number>()
     visibleServices.forEach((s) =>
-      map.set(s.category, (map.get(s.category) ?? 0) + 1),
+      map.set(s.categoryId, (map.get(s.categoryId) ?? 0) + 1),
     )
-    return Array.from(map.entries()).map(([name, count]) => ({ name, count }))
+    return map
   }, [visibleServices])
+
+  const displayCategories = useMemo(
+    () =>
+      allCategories
+        .filter((c) => c.visible)
+        .sort((a, b) => a.sortOrder - b.sortOrder)
+        .map((c) => ({ ...c, count: categoryMap.get(c.id) ?? 0 }))
+        .filter((c) => c.count > 0),
+    [allCategories, categoryMap],
+  )
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
     return visibleServices.filter((s) => {
-      if (activeCategory && s.category !== activeCategory) return false
+      if (activeCategory && s.categoryId !== activeCategory) return false
       if (!q) return true
+      const catName = allCategories.find(c => c.id === s.categoryId)?.name ?? s.categoryId
       return (
         s.name.toLowerCase().includes(q) ||
-        s.category.toLowerCase().includes(q) ||
+        catName.toLowerCase().includes(q) ||
         (s.note?.toLowerCase().includes(q) ?? false)
       )
     })
@@ -123,7 +135,7 @@ export function CalculatorPage() {
             </div>
 
             {/* Categories */}
-            {categories.length > 1 && (
+            {displayCategories.length > 1 && (
               <div className="flex flex-wrap gap-1.5 pt-1">
                 <CategoryChip
                   label="Alle"
@@ -131,15 +143,15 @@ export function CalculatorPage() {
                   active={activeCategory === null}
                   onClick={() => setActiveCategory(null)}
                 />
-                {categories.map((c) => (
+                {displayCategories.map((c) => (
                   <CategoryChip
-                    key={c.name}
-                    label={c.name}
+                    key={c.id}
+                    label={c.icon ? `${c.icon} ${c.name}` : c.name}
                     count={c.count}
-                    active={activeCategory === c.name}
+                    active={activeCategory === c.id}
                     onClick={() =>
                       setActiveCategory(
-                        activeCategory === c.name ? null : c.name,
+                        activeCategory === c.id ? null : c.id,
                       )
                     }
                   />
@@ -161,15 +173,21 @@ export function CalculatorPage() {
                 </p>
               </div>
             ) : (
-              filtered.map((s) => (
-                <ServiceRow
-                  key={s.id}
-                  service={s}
-                  quantity={cart[s.id] ?? 0}
-                  onChangeQuantity={(q) => setQuantity(s.id, q)}
-                  showPrices={showPrices}
-                />
-              ))
+              filtered.map((s) => {
+                const cat = allCategories.find(c => c.id === s.categoryId)
+                return (
+                  <ServiceRow
+                    key={s.id}
+                    service={s}
+                    quantity={cart[s.id] ?? 0}
+                    onChangeQuantity={(q) => setQuantity(s.id, q)}
+                    showPrices={showPrices}
+                    categoryName={cat?.name}
+                    categoryColor={cat?.color}
+                    categoryIcon={cat?.icon}
+                  />
+                )
+              })
             )}
           </div>
 

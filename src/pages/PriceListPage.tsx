@@ -15,7 +15,7 @@ import { formatEUR, formatPct } from '../lib/format'
 import type { Service } from '../types'
 
 export function PriceListPage() {
-  const { services, isLoading, deleteService, updateService } = useApp()
+  const { services, isLoading, deleteService, updateService, categories: allCategories } = useApp()
   const [search, setSearch] = useState('')
   const [activeCategory, setActiveCategory] = useState<string | null>(null)
   const [editing, setEditing] = useState<Service | undefined>(undefined)
@@ -57,25 +57,34 @@ export function PriceListPage() {
     }
   }
 
-  const categories = useMemo(() => {
+  const displayCategories = useMemo(() => {
     const map = new Map<string, number>()
-    services.forEach((s) => map.set(s.category, (map.get(s.category) ?? 0) + 1))
-    return Array.from(map.entries()).map(([name, count]) => ({ name, count }))
-  }, [services])
+    services.forEach((s) => map.set(s.categoryId, (map.get(s.categoryId) ?? 0) + 1))
+    return allCategories
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .map((c) => ({ ...c, count: map.get(c.id) ?? 0 }))
+  }, [services, allCategories])
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
     return services
       .filter((s) => {
-        if (activeCategory && s.category !== activeCategory) return false
+        if (activeCategory && s.categoryId !== activeCategory) return false
         if (!q) return true
+        const categoryName = allCategories.find(c => c.id === s.categoryId)?.name ?? s.categoryId
         return (
           s.name.toLowerCase().includes(q) ||
-          s.category.toLowerCase().includes(q)
+          categoryName.toLowerCase().includes(q)
         )
       })
-      .sort((a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name))
-  }, [services, activeCategory, search])
+      .sort((a, b) => {
+        const catA = allCategories.find(c => c.id === a.categoryId)
+        const catB = allCategories.find(c => c.id === b.categoryId)
+        const sortA = catA ? catA.sortOrder : 999
+        const sortB = catB ? catB.sortOrder : 999
+        return sortA - sortB || a.name.localeCompare(b.name)
+      })
+  }, [services, activeCategory, search, allCategories])
 
   const totalRevenue = useMemo(
     () => services.reduce((s, x) => s + x.salePrice, 0),
@@ -117,7 +126,7 @@ export function PriceListPage() {
         />
         <StatCard
           eyebrow="Kategorien"
-          value={categories.length.toString()}
+          value={displayCategories.length.toString()}
         />
       </div>
 
@@ -133,7 +142,7 @@ export function PriceListPage() {
             className="input w-full pl-10"
           />
         </div>
-        {categories.length > 1 && (
+        {displayCategories.length > 1 && (
           <div className="flex flex-wrap gap-1.5">
             <CategoryChip
               label="Alle"
@@ -141,14 +150,14 @@ export function PriceListPage() {
               active={activeCategory === null}
               onClick={() => setActiveCategory(null)}
             />
-            {categories.map((c) => (
+            {displayCategories.map((c) => (
               <CategoryChip
-                key={c.name}
-                label={c.name}
+                key={c.id}
+                label={c.icon ? `${c.icon} ${c.name}` : c.name}
                 count={c.count}
-                active={activeCategory === c.name}
+                active={activeCategory === c.id}
                 onClick={() =>
-                  setActiveCategory(activeCategory === c.name ? null : c.name)
+                  setActiveCategory(activeCategory === c.id ? null : c.id)
                 }
               />
             ))}
@@ -171,6 +180,7 @@ export function PriceListPage() {
           {filtered.map((s) => {
             const profit = s.salePrice - s.purchasePrice
             const margin = s.salePrice > 0 ? profit / s.salePrice : 0
+            const categoryName = allCategories.find(c => c.id === s.categoryId)?.name ?? s.categoryId
 
             return (
               <div
@@ -193,7 +203,7 @@ export function PriceListPage() {
                   )}
                 </div>
                 <div className="flex items-center text-sm text-ink-soft truncate">
-                  {s.category}
+                  {categoryName}
                 </div>
                 <div className="flex items-center justify-end num text-sm text-ink">
                   {formatEUR(s.purchasePrice)}
@@ -251,6 +261,7 @@ export function PriceListPage() {
         {filtered.map((s) => {
           const profit = s.salePrice - s.purchasePrice
           const margin = s.salePrice > 0 ? profit / s.salePrice : 0
+          const categoryName = allCategories.find(c => c.id === s.categoryId)?.name ?? s.categoryId
 
           return (
             <div
@@ -263,7 +274,7 @@ export function PriceListPage() {
                     {s.name}
                   </h3>
                   <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                    <span className="badge-neutral">{s.category}</span>
+                    <span className="badge-neutral">{categoryName}</span>
                     {!s.visible && (
                       <span className="badge-neutral">Versteckt</span>
                     )}
