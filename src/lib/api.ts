@@ -7,7 +7,7 @@ function toCamel(row: any): Service {
   return {
     id: row.id,
     name: row.name,
-    categoryId: row.category_id,
+    categoryId: row.category_id ?? row.categoryId,
     purchasePrice: parseFloat(row.purchase_price ?? row.purchasePrice ?? 0),
     salePrice: parseFloat(row.sale_price ?? row.salePrice ?? 0),
     defaultQuantity: row.default_quantity ?? row.defaultQuantity ?? 1,

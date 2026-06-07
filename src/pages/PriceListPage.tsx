@@ -59,7 +59,7 @@ export function PriceListPage() {
 
   const displayCategories = useMemo(() => {
     const map = new Map<string, number>()
-    services.forEach((s) => map.set(s.categoryId, (map.get(s.categoryId) ?? 0) + 1))
+    services.forEach((s) => map.set(s.categoryId ?? '', (map.get(s.categoryId ?? '') ?? 0) + 1))
     return allCategories
       .sort((a, b) => a.sortOrder - b.sortOrder)
       .map((c) => ({ ...c, count: map.get(c.id) ?? 0 }))
@@ -71,7 +71,7 @@ export function PriceListPage() {
       .filter((s) => {
         if (activeCategory && s.categoryId !== activeCategory) return false
         if (!q) return true
-        const categoryName = allCategories.find(c => c.id === s.categoryId)?.name ?? s.categoryId
+        const categoryName = allCategories.find(c => c.id === s.categoryId)?.name ?? s.categoryId ?? ''
         return (
           s.name.toLowerCase().includes(q) ||
           categoryName.toLowerCase().includes(q)
@@ -180,7 +180,7 @@ export function PriceListPage() {
           {filtered.map((s) => {
             const profit = s.salePrice - s.purchasePrice
             const margin = s.salePrice > 0 ? profit / s.salePrice : 0
-            const categoryName = allCategories.find(c => c.id === s.categoryId)?.name ?? s.categoryId
+            const categoryName = allCategories.find(c => c.id === s.categoryId)?.name ?? s.categoryId ?? ''
 
             return (
               <div
@@ -261,7 +261,7 @@ export function PriceListPage() {
         {filtered.map((s) => {
           const profit = s.salePrice - s.purchasePrice
           const margin = s.salePrice > 0 ? profit / s.salePrice : 0
-          const categoryName = allCategories.find(c => c.id === s.categoryId)?.name ?? s.categoryId
+          const categoryName = allCategories.find(c => c.id === s.categoryId)?.name ?? s.categoryId ?? ''
 
           return (
             <div

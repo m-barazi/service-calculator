@@ -72,7 +72,7 @@ export function ServiceRow({
             className="badge-neutral"
             style={categoryColor ? { backgroundColor: categoryColor + '20', color: categoryColor, borderColor: categoryColor + '40' } : undefined}
           >
-            {categoryIcon ? `${categoryIcon} ` : ''}{categoryName ?? service.categoryId}
+            {categoryIcon ? `${categoryIcon} ` : ''}{categoryName ?? service.categoryId ?? 'Ohne Kategorie'}
           </span>
           {service.note && (
             <span className="inline-flex items-center gap-1 text-ink-muted">

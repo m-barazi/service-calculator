@@ -32,9 +32,10 @@ export function CalculatorPage() {
 
   const categoryMap = useMemo(() => {
     const map = new Map<string, number>()
-    visibleServices.forEach((s) =>
-      map.set(s.categoryId, (map.get(s.categoryId) ?? 0) + 1),
-    )
+    visibleServices.forEach((s) => {
+      const catId = s.categoryId ?? ''
+      map.set(catId, (map.get(catId) ?? 0) + 1)
+    })
     return map
   }, [visibleServices])
 
@@ -53,7 +54,7 @@ export function CalculatorPage() {
     return visibleServices.filter((s) => {
       if (activeCategory && s.categoryId !== activeCategory) return false
       if (!q) return true
-      const catName = allCategories.find(c => c.id === s.categoryId)?.name ?? s.categoryId
+      const catName = allCategories.find(c => c.id === s.categoryId)?.name ?? s.categoryId ?? ''
       return (
         s.name.toLowerCase().includes(q) ||
         catName.toLowerCase().includes(q) ||
