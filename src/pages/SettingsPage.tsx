@@ -12,18 +12,20 @@ import {
   Upload,
 } from 'lucide-react'
 import { useApp } from '../hooks/useApp'
-import { exportAll, importAll, type BackupPayload } from '../lib/storage'
+import { buildBackup, parseBackup, type BackupPayload } from '../lib/storage'
+import { importBackup } from '../lib/api'
 import { formatDate } from '../lib/format'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { Logo } from '../components/Logo'
 
 export function SettingsPage() {
-  const { settings, updateSettings } = useApp()
+  const { settings, updateSettings, services, categories, refreshServices, refreshCategories } = useApp()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [importStatus, setImportStatus] = useState<{
     kind: 'idle' | 'success' | 'error'
     message?: string
   }>({ kind: 'idle' })
+  const [isImporting, setIsImporting] = useState(false)
   const [confirmReset, setConfirmReset] = useState(false)
 
   // ----- VAT slider state (percent, integer) -----
@@ -53,7 +55,7 @@ export function SettingsPage() {
 
   // ----- Export -----
   const handleExport = () => {
-    const payload = exportAll()
+    const payload = buildBackup(services, categories, settings)
     const json = JSON.stringify(payload, null, 2)
     const blob = new Blob([json], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
@@ -75,16 +77,24 @@ export function SettingsPage() {
   const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
+    setIsImporting(true)
+    setImportStatus({ kind: 'idle' })
     try {
       const text = await file.text()
-      const data = JSON.parse(text) as BackupPayload
-      importAll(data)
+      const raw = JSON.parse(text)
+      const data = parseBackup(raw)
+      const result = await importBackup(data.services, data.categories, categories, services)
+
+      // Restore settings to localStorage
+      updateSettings(data.settings)
+
+      // Refresh data from backend
+      await Promise.all([refreshServices(), refreshCategories()])
+
       setImportStatus({
         kind: 'success',
-        message: `Backup vom ${formatDate(new Date(data.exportedAt))} wiederhergestellt.`,
+        message: `Backup importiert: ${result.createdCategories} Kategorien, ${result.createdServices} neue und ${result.updatedServices} aktualisierte Leistungen.`,
       })
-      // Reload to refresh state from storage
-      setTimeout(() => window.location.reload(), 800)
     } catch (err) {
       setImportStatus({
         kind: 'error',
@@ -94,6 +104,7 @@ export function SettingsPage() {
             : 'Datei konnte nicht eingelesen werden.',
       })
     } finally {
+      setIsImporting(false)
       if (fileInputRef.current) fileInputRef.current.value = ''
     }
   }
@@ -101,7 +112,6 @@ export function SettingsPage() {
   // ----- Reset -----
   const handleReset = () => {
     try {
-      localStorage.removeItem('sc.services.v1')
       localStorage.removeItem('sc.settings.v1')
       localStorage.removeItem('sc.cart.v1')
     } catch {
@@ -331,10 +341,11 @@ export function SettingsPage() {
           <button
             type="button"
             onClick={handleImportClick}
-            className="btn-secondary"
+            disabled={isImporting}
+            className="btn-secondary disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Upload className="size-4" />
-            Daten importieren
+            {isImporting ? 'Importiere…' : 'Daten importieren'}
           </button>
 
           <input
@@ -369,9 +380,9 @@ export function SettingsPage() {
         )}
 
         <p className="mt-4 text-xs text-ink-faint">
-          Hinweis: Beim Zurücksetzen werden Preisliste, Warenkorb und
-          Einstellungen aus dem Browser entfernt. Die Standard-Preisliste wird
-          neu geladen.
+          Hinweis: Der Import erstellt fehlende Kategorien und Leistungen in der
+          Datenbank. Bestehende Leistungen werden aktualisiert. Einstellungen
+          werden im Browser gespeichert.
         </p>
       </section>
 

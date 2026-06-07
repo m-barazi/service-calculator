@@ -1,8 +1,6 @@
-import type { Service, Settings } from '../types'
-import { seedServices } from '../data/seedServices'
+import type { Category, Service, Settings } from '../types'
 
 const KEYS = {
-  services: 'sc.services.v1',
   settings: 'sc.settings.v1',
   cart: 'sc.cart.v1',
 } as const
@@ -12,36 +10,6 @@ const DEFAULT_SETTINGS: Settings = {
   companyName: 'Mein Unternehmen',
   companyTagline: 'Dienstleistungen & Print',
   theme: 'system',
-}
-
-// ===== Services =====
-// NOTE: The app loads services from the API (useApp hook). These localStorage
-// functions are only used by the export/import backup feature. The seed data
-// has empty categoryId strings — real category IDs come from the API.
-
-export function loadServices(): Service[] {
-  try {
-    const raw = localStorage.getItem(KEYS.services)
-    if (!raw) {
-      // First run — seed with fallback data (categoryId will be empty strings)
-      saveServices(seedServices)
-      return seedServices
-    }
-    const parsed = JSON.parse(raw) as Service[]
-    if (!Array.isArray(parsed)) return seedServices
-    return parsed
-  } catch (e) {
-    console.error('Failed to load services', e)
-    return seedServices
-  }
-}
-
-export function saveServices(services: Service[]): void {
-  try {
-    localStorage.setItem(KEYS.services, JSON.stringify(services))
-  } catch (e) {
-    console.error('Failed to save services', e)
-  }
 }
 
 // ===== Settings =====
@@ -99,28 +67,61 @@ export function saveCart(cart: Record<string, { quantity: number; note: string }
   }
 }
 
-// ===== Export / Import (manual backup) =====
+// ===== Export / Import (backup via API) =====
 
 export interface BackupPayload {
-  version: 1
+  version: 2
   exportedAt: string
   services: Service[]
+  categories: Category[]
   settings: Settings
 }
 
-export function exportAll(): BackupPayload {
+/** Legacy format (version 1) — category was a string, no categories array */
+export interface BackupPayloadV1 {
+  version: 1
+  exportedAt: string
+  services: (Service & { category?: string })[]
+  settings: Settings
+}
+
+export function buildBackup(
+  services: Service[],
+  categories: Category[],
+  settings: Settings,
+): BackupPayload {
   return {
-    version: 1,
+    version: 2,
     exportedAt: new Date().toISOString(),
-    services: loadServices(),
-    settings: loadSettings(),
+    services,
+    categories,
+    settings,
   }
 }
 
-export function importAll(data: BackupPayload): void {
-  if (data.version !== 1) throw new Error('Unsupported backup version')
-  saveServices(data.services)
-  saveSettings(data.settings)
+export function parseBackup(raw: unknown): BackupPayload {
+  const data = raw as BackupPayloadV1 | BackupPayload
+
+  if (data.version === 2) {
+    return data as BackupPayload
+  }
+
+  if (data.version === 1) {
+    // Migrate: category string → categoryId (empty, will be resolved during import)
+    const migrated: BackupPayload = {
+      version: 2,
+      exportedAt: data.exportedAt,
+      settings: data.settings,
+      categories: [],
+      services: (data as BackupPayloadV1).services.map((s) => {
+        const { category, ...rest } = s
+        return { ...rest, categoryId: '' } as Service
+      }),
+    }
+    return migrated
+  }
+
+  throw new Error('Nicht unterstützte Backup-Version')
 }
 
 // ===== ID helper =====

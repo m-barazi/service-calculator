@@ -104,3 +104,80 @@ export async function deleteCategory(id: string): Promise<void> {
   }
   if (!res.ok && res.status !== 204) throw new Error('Failed to delete category')
 }
+
+// ===== Bulk Import =====
+
+export async function importBackup(
+  services: Service[],
+  categories: Category[],
+  existingCategories: Category[],
+  existingServices: Service[],
+): Promise<{ createdCategories: number; createdServices: number; updatedServices: number }> {
+  // Build a map: category name → category ID
+  // First from existing categories, then from newly created ones
+  const categoryNameToId = new Map<string, string>()
+  for (const cat of existingCategories) {
+    categoryNameToId.set(cat.name, cat.id)
+  }
+
+  let createdCategories = 0
+
+  // Create categories that don't exist yet
+  for (const cat of categories) {
+    if (!categoryNameToId.has(cat.name)) {
+      const created = await createCategory({
+        name: cat.name,
+        description: cat.description,
+        icon: cat.icon,
+        color: cat.color,
+        sortOrder: cat.sortOrder,
+        visible: cat.visible,
+      })
+      categoryNameToId.set(cat.name, created.id)
+      createdCategories++
+    }
+  }
+
+  // Build a set of existing service IDs for update detection
+  const existingServiceIds = new Set(existingServices.map((s) => s.id))
+
+  let createdServices = 0
+  let updatedServices = 0
+
+  // Create or update services
+  for (const svc of services) {
+    // Resolve categoryId from category name if categoryId is empty (v1 migration)
+    let categoryId = svc.categoryId
+    if (!categoryId && (svc as any).category) {
+      categoryId = categoryNameToId.get((svc as any).category) ?? ''
+    }
+    // If still empty, try to find a matching category by position or leave empty
+    if (!categoryId && categories.length > 0) {
+      // Fallback: use first category
+      categoryId = categoryNameToId.values().next().value ?? ''
+    }
+
+    const serviceData = {
+      name: svc.name,
+      categoryId,
+      purchasePrice: svc.purchasePrice,
+      salePrice: svc.salePrice,
+      defaultQuantity: svc.defaultQuantity,
+      url: svc.url,
+      note: svc.note,
+      visible: svc.visible,
+    }
+
+    if (existingServiceIds.has(svc.id)) {
+      // Update existing service
+      await updateService(svc.id, serviceData)
+      updatedServices++
+    } else {
+      // Create new service (backend will assign a new ID)
+      await createService(serviceData)
+      createdServices++
+    }
+  }
+
+  return { createdCategories, createdServices, updatedServices }
+}
