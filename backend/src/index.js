@@ -532,6 +532,49 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Backend server running on port ${PORT}`);
+// ── Startup: ensure tables exist ─────────────────────────────────────────
+
+async function ensureTables() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS quotes (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      title TEXT NOT NULL DEFAULT 'Neues Angebot',
+      customer_name TEXT,
+      status TEXT NOT NULL DEFAULT 'draft',
+      discount_type TEXT,
+      discount_value NUMERIC NOT NULL DEFAULT 0,
+      notes TEXT,
+      valid_until DATE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_quotes_status ON quotes(status)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_quotes_created ON quotes(created_at DESC)`);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS quote_items (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      quote_id UUID NOT NULL REFERENCES quotes(id) ON DELETE CASCADE,
+      service_id UUID REFERENCES services(id) ON DELETE SET NULL,
+      custom_name TEXT,
+      custom_note TEXT,
+      unit_price NUMERIC NOT NULL DEFAULT 0,
+      quantity NUMERIC NOT NULL DEFAULT 1,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_quote_items_quote ON quote_items(quote_id, sort_order)`);
+  console.log('Database tables ensured');
+}
+
+ensureTables().then(() => {
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Backend server running on port ${PORT}`);
+  });
+}).catch((err) => {
+  console.error('Failed to ensure database tables:', err);
+  process.exit(1);
 });
