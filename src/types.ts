@@ -79,3 +79,55 @@ export interface CartTotals {
   itemCount: number
   vatRate: number
 }
+
+// ===== Quote types =====
+
+export type QuoteStatus = 'draft' | 'sent' | 'accepted' | 'rejected'
+export type DiscountType = 'percent' | 'amount'
+
+export interface Quote {
+  id: string
+  title: string
+  customerName?: string
+  status: QuoteStatus
+  discountType?: DiscountType
+  discountValue: number
+  notes?: string
+  validUntil?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface QuoteItem {
+  id: string
+  quoteId: string
+  serviceId?: string
+  customName?: string
+  customNote?: string
+  quantity: number
+  unitPrice: number
+  sortOrder: number
+  createdAt: string
+  updatedAt: string
+  service?: Service
+}
+
+export interface QuoteWithItems extends Quote {
+  items: QuoteItem[]
+}
+
+export interface QuoteTotals {
+  subtotalNet: number
+  discountAmount: number
+  totalNet: number
+  vatAmount: number
+  totalGross: number
+  lines: QuoteLineComputation[]
+}
+
+export interface QuoteLineComputation {
+  item: QuoteItem
+  service?: Service
+  lineNet: number
+  lineGross: number
+}

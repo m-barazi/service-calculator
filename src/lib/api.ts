@@ -1,5 +1,5 @@
 /// <reference types="vite/client" />
-import type { Service, Category } from '../types'
+import type { Service, Category, Quote, QuoteItem, QuoteWithItems } from '../types'
 
 const API_URL = import.meta.env.VITE_API_URL || '/api'
 
@@ -180,4 +180,119 @@ export async function importBackup(
   }
 
   return { createdCategories, createdServices, updatedServices }
+}
+
+// ===== Quote API =====
+
+function toCamelQuote(row: any): Quote {
+  return {
+    id: row.id,
+    title: row.title,
+    customerName: row.customer_name ?? row.customerName,
+    status: row.status,
+    discountType: row.discount_type ?? row.discountType,
+    discountValue: parseFloat(row.discount_value ?? row.discountValue ?? 0),
+    notes: row.notes,
+    validUntil: row.valid_until ?? row.validUntil,
+    createdAt: row.created_at ?? row.createdAt,
+    updatedAt: row.updated_at ?? row.updatedAt,
+  }
+}
+
+function toCamelQuoteItem(row: any): QuoteItem {
+  const item: QuoteItem = {
+    id: row.id,
+    quoteId: row.quote_id ?? row.quoteId,
+    serviceId: row.service_id ?? row.serviceId,
+    customName: row.custom_name ?? row.customName,
+    customNote: row.custom_note ?? row.customNote,
+    quantity: row.quantity,
+    unitPrice: parseFloat(row.unit_price ?? row.unitPrice ?? 0),
+    sortOrder: row.sort_order ?? row.sortOrder ?? 0,
+    createdAt: row.created_at ?? row.createdAt,
+    updatedAt: row.updated_at ?? row.updatedAt,
+  }
+  if (row.service_id && row.service_name) {
+    item.service = toCamel(row)
+  }
+  return item
+}
+
+export async function fetchQuotes(): Promise<Quote[]> {
+  const res = await fetch(`${API_URL}/quotes`)
+  if (!res.ok) throw new Error('Failed to fetch quotes')
+  const data = await res.json()
+  return data.map(toCamelQuote)
+}
+
+export async function fetchQuote(id: string): Promise<QuoteWithItems> {
+  const res = await fetch(`${API_URL}/quotes/${id}`)
+  if (!res.ok) throw new Error('Failed to fetch quote')
+  const data = await res.json()
+  const quote = toCamelQuote(data) as QuoteWithItems
+  quote.items = (data.items ?? []).map(toCamelQuoteItem)
+  return quote
+}
+
+export async function createQuote(quote: Omit<Quote, 'id' | 'createdAt' | 'updatedAt'>): Promise<Quote> {
+  const res = await fetch(`${API_URL}/quotes`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(quote),
+  })
+  if (!res.ok) throw new Error('Failed to create quote')
+  const data = await res.json()
+  return toCamelQuote(data)
+}
+
+export async function updateQuote(id: string, patch: Partial<Quote>): Promise<Quote> {
+  const res = await fetch(`${API_URL}/quotes/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  })
+  if (!res.ok) throw new Error('Failed to update quote')
+  const data = await res.json()
+  return toCamelQuote(data)
+}
+
+export async function deleteQuote(id: string): Promise<void> {
+  const res = await fetch(`${API_URL}/quotes/${id}`, { method: 'DELETE' })
+  if (!res.ok && res.status !== 204) throw new Error('Failed to delete quote')
+}
+
+export async function addQuoteItem(quoteId: string, item: Omit<QuoteItem, 'id' | 'quoteId' | 'createdAt' | 'updatedAt'>): Promise<QuoteItem> {
+  const res = await fetch(`${API_URL}/quotes/${quoteId}/items`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(item),
+  })
+  if (!res.ok) throw new Error('Failed to add quote item')
+  const data = await res.json()
+  return toCamelQuoteItem(data)
+}
+
+export async function updateQuoteItem(quoteId: string, itemId: string, patch: Partial<QuoteItem>): Promise<QuoteItem> {
+  const res = await fetch(`${API_URL}/quotes/${quoteId}/items/${itemId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  })
+  if (!res.ok) throw new Error('Failed to update quote item')
+  const data = await res.json()
+  return toCamelQuoteItem(data)
+}
+
+export async function deleteQuoteItem(quoteId: string, itemId: string): Promise<void> {
+  const res = await fetch(`${API_URL}/quotes/${quoteId}/items/${itemId}`, { method: 'DELETE' })
+  if (!res.ok && res.status !== 204) throw new Error('Failed to delete quote item')
+}
+
+export async function reorderQuoteItems(quoteId: string, itemIds: string[]): Promise<void> {
+  const res = await fetch(`${API_URL}/quotes/${quoteId}/items/reorder`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ itemIds }),
+  })
+  if (!res.ok) throw new Error('Failed to reorder items')
 }
