@@ -235,6 +235,234 @@ app.delete('/api/categories/:id', async (req, res) => {
   }
 });
 
+// ── Quote CRUD ───────────────────────────────────────────────────────────
+
+function toCamelQuote(row) {
+  return {
+    id: row.id,
+    title: row.title,
+    customerName: row.customer_name,
+    status: row.status,
+    discountType: row.discount_type,
+    discountValue: parseFloat(row.discount_value ?? 0),
+    notes: row.notes,
+    validUntil: row.valid_until ? (row.valid_until.toISOString ? row.valid_until.toISOString().slice(0, 10) : String(row.valid_until).slice(0, 10)) : null,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function toCamelQuoteItem(row) {
+  const item = {
+    id: row.id,
+    quoteId: row.quote_id,
+    serviceId: row.service_id,
+    customName: row.custom_name,
+    customNote: row.custom_note,
+    quantity: row.quantity,
+    unitPrice: parseFloat(row.unit_price),
+    sortOrder: row.sort_order,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+  if (row.service_id && row.service_name) {
+    item.service = toCamel(row);
+  }
+  return item;
+}
+
+app.get('/api/quotes', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM quotes ORDER BY created_at DESC');
+    res.json(result.rows.map(toCamelQuote));
+  } catch (error) {
+    console.error('Error fetching quotes:', error);
+    res.status(500).json({ error: 'Failed to fetch quotes' });
+  }
+});
+
+app.get('/api/quotes/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const quoteResult = await pool.query('SELECT * FROM quotes WHERE id = $1', [id]);
+    if (quoteResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Quote not found' });
+    }
+    const itemsResult = await pool.query(
+      `SELECT qi.*, s.name as service_name, s.purchase_price as service_purchase_price,
+              s.sale_price as service_sale_price, s.category_id as service_category_id
+       FROM quote_items qi
+       LEFT JOIN services s ON qi.service_id = s.id
+       WHERE qi.quote_id = $1
+       ORDER BY qi.sort_order, qi.created_at`,
+      [id]
+    );
+    const quote = toCamelQuote(quoteResult.rows[0]);
+    quote.items = itemsResult.rows.map(toCamelQuoteItem);
+    res.json(quote);
+  } catch (error) {
+    console.error('Error fetching quote:', error);
+    res.status(500).json({ error: 'Failed to fetch quote' });
+  }
+});
+
+app.post('/api/quotes', async (req, res) => {
+  try {
+    const { title, customerName, status, discountType, discountValue, notes, validUntil } = req.body;
+    if (!title) {
+      return res.status(400).json({ error: 'Title is required' });
+    }
+    const result = await pool.query(
+      `INSERT INTO quotes (title, customer_name, status, discount_type, discount_value, notes, valid_until, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
+       RETURNING *`,
+      [title, customerName || null, status || 'draft', discountType || null, discountValue ?? 0, notes || null, validUntil || null]
+    );
+    res.status(201).json(toCamelQuote(result.rows[0]));
+  } catch (error) {
+    console.error('Error creating quote:', error);
+    res.status(500).json({ error: 'Failed to create quote' });
+  }
+});
+
+app.put('/api/quotes/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { title, customerName, status, discountType, discountValue, notes, validUntil } = req.body;
+
+    const sets = [];
+    const vals = [];
+    let idx = 1;
+
+    if (title !== undefined) { sets.push(`title = $${idx++}`); vals.push(title); }
+    if (customerName !== undefined) { sets.push(`customer_name = $${idx++}`); vals.push(customerName); }
+    if (status !== undefined) { sets.push(`status = $${idx++}`); vals.push(status); }
+    if (discountType !== undefined) { sets.push(`discount_type = $${idx++}`); vals.push(discountType); }
+    if (discountValue !== undefined) { sets.push(`discount_value = $${idx++}`); vals.push(discountValue); }
+    if (notes !== undefined) { sets.push(`notes = $${idx++}`); vals.push(notes); }
+    if (validUntil !== undefined) { sets.push(`valid_until = $${idx++}`); vals.push(validUntil); }
+
+    sets.push(`updated_at = NOW()`);
+    vals.push(id);
+
+    const result = await pool.query(
+      `UPDATE quotes SET ${sets.join(', ')} WHERE id = $${idx} RETURNING *`,
+      vals
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Quote not found' });
+    }
+    res.json(toCamelQuote(result.rows[0]));
+  } catch (error) {
+    console.error('Error updating quote:', error);
+    res.status(500).json({ error: 'Failed to update quote' });
+  }
+});
+
+app.delete('/api/quotes/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.query('DELETE FROM quotes WHERE id = $1 RETURNING *', [id]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Quote not found' });
+    }
+    res.status(204).send();
+  } catch (error) {
+    console.error('Error deleting quote:', error);
+    res.status(500).json({ error: 'Failed to delete quote' });
+  }
+});
+
+// Quote items
+
+app.post('/api/quotes/:id/items', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { serviceId, customName, customNote, quantity, unitPrice, sortOrder } = req.body;
+
+    const quoteCheck = await pool.query('SELECT id FROM quotes WHERE id = $1', [id]);
+    if (quoteCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Quote not found' });
+    }
+
+    const result = await pool.query(
+      `INSERT INTO quote_items (quote_id, service_id, custom_name, custom_note, quantity, unit_price, sort_order, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
+       RETURNING *`,
+      [id, serviceId || null, customName || null, customNote || null, quantity ?? 1, unitPrice ?? 0, sortOrder ?? 0]
+    );
+    res.status(201).json(toCamelQuoteItem(result.rows[0]));
+  } catch (error) {
+    console.error('Error creating quote item:', error);
+    res.status(500).json({ error: 'Failed to create quote item' });
+  }
+});
+
+app.put('/api/quotes/:id/items/:itemId', async (req, res) => {
+  try {
+    const { id, itemId } = req.params;
+    const { serviceId, customName, customNote, quantity, unitPrice, sortOrder } = req.body;
+
+    const sets = [];
+    const vals = [];
+    let idx = 1;
+
+    if (serviceId !== undefined) { sets.push(`service_id = $${idx++}`); vals.push(serviceId); }
+    if (customName !== undefined) { sets.push(`custom_name = $${idx++}`); vals.push(customName); }
+    if (customNote !== undefined) { sets.push(`custom_note = $${idx++}`); vals.push(customNote); }
+    if (quantity !== undefined) { sets.push(`quantity = $${idx++}`); vals.push(quantity); }
+    if (unitPrice !== undefined) { sets.push(`unit_price = $${idx++}`); vals.push(unitPrice); }
+    if (sortOrder !== undefined) { sets.push(`sort_order = $${idx++}`); vals.push(sortOrder); }
+
+    sets.push(`updated_at = NOW()`);
+    vals.push(itemId);
+    vals.push(id);
+
+    const result = await pool.query(
+      `UPDATE quote_items SET ${sets.join(', ')} WHERE id = $${idx} AND quote_id = $${idx + 1} RETURNING *`,
+      vals
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Quote item not found' });
+    }
+    res.json(toCamelQuoteItem(result.rows[0]));
+  } catch (error) {
+    console.error('Error updating quote item:', error);
+    res.status(500).json({ error: 'Failed to update quote item' });
+  }
+});
+
+app.delete('/api/quotes/:id/items/:itemId', async (req, res) => {
+  try {
+    const { id, itemId } = req.params;
+    const result = await pool.query('DELETE FROM quote_items WHERE id = $1 AND quote_id = $2 RETURNING *', [itemId, id]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Quote item not found' });
+    }
+    res.status(204).send();
+  } catch (error) {
+    console.error('Error deleting quote item:', error);
+    res.status(500).json({ error: 'Failed to delete quote item' });
+  }
+});
+
+app.patch('/api/quotes/:id/items/reorder', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { itemIds } = req.body;
+    if (!Array.isArray(itemIds)) {
+      return res.status(400).json({ error: 'itemIds must be an array' });
+    }
+    for (let i = 0; i < itemIds.length; i++) {
+      await pool.query('UPDATE quote_items SET sort_order = $1, updated_at = NOW() WHERE id = $2 AND quote_id = $3', [i, itemIds[i], id]);
+    }
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error reordering quote items:', error);
+    res.status(500).json({ error: 'Failed to reorder items' });
+  }
+});
+
 // ── Seed ────────────────────────────────────────────────────────────────
 
 app.post('/api/seed', async (req, res) => {
