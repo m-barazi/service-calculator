@@ -75,3 +75,38 @@ UNION ALL
   SELECT 'Starter Business Email 10GB', c.id, 19.33, 39.33, 1, NULL, 'Pro Postfach / Jahr', true FROM categories c WHERE c.name = 'Hosting & Domains'
 UNION ALL
   SELECT 'Google Workspace (Starter)', c.id, 72.27, 104.03, 1, NULL, 'Pro User / Jahr', true FROM categories c WHERE c.name = 'Hosting & Domains';
+
+-- Quotes table
+CREATE TABLE IF NOT EXISTS quotes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  title VARCHAR(255) NOT NULL,
+  customer_name VARCHAR(255),
+  status VARCHAR(20) NOT NULL DEFAULT 'draft'
+    CHECK (status IN ('draft', 'sent', 'accepted', 'rejected')),
+  discount_type VARCHAR(10)
+    CHECK (discount_type IS NULL OR discount_type IN ('percent', 'amount')),
+  discount_value DECIMAL(10,4) DEFAULT 0,
+  notes TEXT,
+  valid_until DATE,
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_quotes_status ON quotes(status);
+CREATE INDEX IF NOT EXISTS idx_quotes_created ON quotes(created_at DESC);
+
+-- Quote items table
+CREATE TABLE IF NOT EXISTS quote_items (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  quote_id UUID NOT NULL REFERENCES quotes(id) ON DELETE CASCADE,
+  service_id UUID REFERENCES services(id) ON DELETE SET NULL,
+  custom_name VARCHAR(255),
+  custom_note TEXT,
+  quantity INTEGER NOT NULL DEFAULT 1,
+  unit_price DECIMAL(10,4) NOT NULL,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_quote_items_quote ON quote_items(quote_id, sort_order);
