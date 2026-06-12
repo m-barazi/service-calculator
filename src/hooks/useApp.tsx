@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import type { Service, Settings, Category } from '../types'
+import type { Service, Settings, Category, Quote, QuoteWithItems } from '../types'
 import {
   loadCart,
   loadSettings,
@@ -23,6 +23,14 @@ import {
   createCategory,
   updateCategory as updateCategoryApi,
   deleteCategory as deleteCategoryApi,
+  fetchQuotes,
+  createQuote as createQuoteApi,
+  updateQuote as updateQuoteApi,
+  deleteQuote as deleteQuoteApi,
+  fetchQuote as fetchQuoteApi,
+  addQuoteItem as addQuoteItemApi,
+  updateQuoteItem as updateQuoteItemApi,
+  deleteQuoteItem as deleteQuoteItemApi,
 } from '../lib/api'
 import { useTheme } from './useTheme'
 
@@ -54,6 +62,18 @@ interface AppState {
   updateCategory: (id: string, patch: Partial<Category>) => Promise<void>
   deleteCategory: (id: string) => Promise<void>
   refreshCategories: () => Promise<void>
+
+  // Quotes (loaded from API)
+  quotes: Quote[]
+  isLoadingQuotes: boolean
+  addQuote: (q: Omit<Quote, 'id' | 'createdAt' | 'updatedAt'>) => Promise<Quote>
+  updateQuote: (id: string, patch: Partial<Quote>) => Promise<void>
+  deleteQuote: (id: string) => Promise<void>
+  refreshQuotes: () => Promise<void>
+  fetchQuoteDetail: (id: string) => Promise<QuoteWithItems>
+  addItem: (quoteId: string, item: Omit<import('../types').QuoteItem, 'id' | 'quoteId' | 'createdAt' | 'updatedAt'>) => Promise<import('../types').QuoteItem>
+  updateItem: (quoteId: string, itemId: string, patch: Partial<import('../types').QuoteItem>) => Promise<void>
+  deleteItem: (quoteId: string, itemId: string) => Promise<void>
 }
 
 const AppContext = createContext<AppState | null>(null)
@@ -63,6 +83,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true)
   const [categories, setCategories] = useState<Category[]>([])
   const [isLoadingCategories, setIsLoadingCategories] = useState(true)
+  const [quotes, setQuotes] = useState<Quote[]>([])
+  const [isLoadingQuotes, setIsLoadingQuotes] = useState(true)
   const [cart, setCart] = useState<Record<string, { quantity: number; note: string }>>(() => loadCart())
   const [settings, setSettings] = useState<Settings>(() => loadSettings())
 
@@ -73,17 +95,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const load = async () => {
       try {
-        const [servicesData, categoriesData] = await Promise.all([
+        const [servicesData, categoriesData, quotesData] = await Promise.all([
           fetchServices(),
           fetchCategories(),
+          fetchQuotes(),
         ])
         setServices(servicesData)
         setCategories(categoriesData)
+        setQuotes(quotesData)
       } catch (error) {
         console.error('Failed to load data:', error)
       } finally {
         setIsLoading(false)
         setIsLoadingCategories(false)
+        setIsLoadingQuotes(false)
       }
     }
     load()
@@ -162,6 +187,57 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  // ---- Quote operations ----
+  const addQuote = useCallback(
+    async (q: Omit<Quote, 'id' | 'createdAt' | 'updatedAt'>) => {
+      const created = await createQuoteApi(q)
+      setQuotes((prev) => [created, ...prev])
+      return created
+    },
+    [],
+  )
+
+  const updateQuote = useCallback(async (id: string, patch: Partial<Quote>) => {
+    const updated = await updateQuoteApi(id, patch)
+    setQuotes((prev) => prev.map((q) => (q.id === id ? updated : q)))
+  }, [])
+
+  const deleteQuote = useCallback(async (id: string) => {
+    await deleteQuoteApi(id)
+    setQuotes((prev) => prev.filter((q) => q.id !== id))
+  }, [])
+
+  const refreshQuotes = useCallback(async () => {
+    try {
+      const data = await fetchQuotes()
+      setQuotes(data)
+    } catch (error) {
+      console.error('Failed to refresh quotes:', error)
+    }
+  }, [])
+
+  const fetchQuoteDetail = useCallback(async (id: string) => {
+    return await fetchQuoteApi(id)
+  }, [])
+
+  const addItem = useCallback(
+    async (quoteId: string, item: Omit<import('../types').QuoteItem, 'id' | 'quoteId' | 'createdAt' | 'updatedAt'>) => {
+      return await addQuoteItemApi(quoteId, item)
+    },
+    [],
+  )
+
+  const updateItem = useCallback(
+    async (quoteId: string, itemId: string, patch: Partial<import('../types').QuoteItem>) => {
+      await updateQuoteItemApi(quoteId, itemId, patch)
+    },
+    [],
+  )
+
+  const deleteItem = useCallback(async (quoteId: string, itemId: string) => {
+    await deleteQuoteItemApi(quoteId, itemId)
+  }, [])
+
   // ---- Cart operations ----
   const setQuantity = useCallback((serviceId: string, quantity: number) => {
     setCart((prev) => {
@@ -218,6 +294,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
       updateCategory,
       deleteCategory,
       refreshCategories,
+      quotes,
+      isLoadingQuotes,
+      addQuote,
+      updateQuote,
+      deleteQuote,
+      refreshQuotes,
+      fetchQuoteDetail,
+      addItem,
+      updateItem,
+      deleteItem,
     }),
     [
       services,
@@ -240,6 +326,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
       updateCategory,
       deleteCategory,
       refreshCategories,
+      quotes,
+      isLoadingQuotes,
+      addQuote,
+      updateQuote,
+      deleteQuote,
+      refreshQuotes,
+      fetchQuoteDetail,
+      addItem,
+      updateItem,
+      deleteItem,
     ],
   )
 
