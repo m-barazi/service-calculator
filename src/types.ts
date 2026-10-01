@@ -80,8 +80,20 @@ export interface CartTemplate {
 
 export type CartDiscountType = 'percent' | 'amount'
 
+export interface CategorySubtotal {
+  categoryId: string
+  totalCostNet: number
+  totalCostGross: number
+  totalSaleNet: number
+  totalSaleGross: number
+  profitNet: number
+  itemCount: number
+  lineCount: number
+}
+
 export interface CartTotals {
   lines: LineComputation[]
+  categorySubtotals: CategorySubtotal[]
   totalCostNet: number
   totalCostGross: number
   totalSaleNet: number

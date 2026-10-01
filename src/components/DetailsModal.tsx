@@ -1,6 +1,6 @@
-import { Download, FileText, TrendingUp } from 'lucide-react'
+import { Download, FileText, Layers, TrendingUp } from 'lucide-react'
 import { useState } from 'react'
-import type { CartTotals, Settings } from '../types'
+import type { CartTotals, Category, CategorySubtotal, Settings } from '../types'
 import { formatEUR, formatPct } from '../lib/format'
 import { generatePdfReport } from '../lib/pdf'
 import { Modal } from './Modal'
@@ -249,6 +249,31 @@ export function DetailsModal({
             </div>
           </section>
 
+          {/* Category subtotals */}
+          {totals.categorySubtotals.length > 0 && (
+            <section className="card overflow-hidden">
+              <div className="border-b border-border px-5 py-3">
+                <p className="eyebrow flex items-center gap-2">
+                  <Layers className="h-3 w-3" />
+                  Zwischensummen pro Kategorie
+                </p>
+              </div>
+              <div className="space-y-2 px-5 py-4">
+                {sortSubtotals(totals.categorySubtotals, categories).map((sub) => (
+                  <Row
+                    key={sub.categoryId}
+                    label={
+                      categories.find((c) => c.id === sub.categoryId)?.name ??
+                      sub.categoryId
+                    }
+                    value={`${sub.itemCount}× · ${formatEUR(sub.totalSaleNet)}`}
+                    muted
+                  />
+                ))}
+              </div>
+            </section>
+          )}
+
           {/* Cost */}
           <section className="card overflow-hidden">
             <div className="border-b border-border px-5 py-3">
@@ -344,4 +369,16 @@ function Row({
       </span>
     </div>
   )
+}
+
+function sortSubtotals(
+  subtotals: CategorySubtotal[],
+  categories: Category[],
+): CategorySubtotal[] {
+  const order = new Map(categories.map((c, i) => [c.id, i]))
+  return [...subtotals].sort((a, b) => {
+    const ia = order.get(a.categoryId) ?? Infinity
+    const ib = order.get(b.categoryId) ?? Infinity
+    return ia - ib
+  })
 }

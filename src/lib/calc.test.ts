@@ -115,6 +115,63 @@ describe('computeCart', () => {
     expect(totals.lines[0].note).toBe('Rush order')
   })
 
+  it('returns empty category subtotals for empty cart', () => {
+    const services = [makeService({ id: 'a' })]
+    const cart: CartItem[] = [{ serviceId: 'a', quantity: 0, note: '' }]
+
+    const totals = computeCart(cart, services, VAT)
+
+    expect(totals.categorySubtotals).toHaveLength(0)
+  })
+
+  it('aggregates one subtotal per category', () => {
+    const services = [
+      makeService({ id: 'a', categoryId: 'cat-1', salePrice: 50 }),
+      makeService({ id: 'b', categoryId: 'cat-1', salePrice: 30 }),
+      makeService({ id: 'c', categoryId: 'cat-2', salePrice: 20 }),
+    ]
+    const cart: CartItem[] = [
+      { serviceId: 'a', quantity: 2, note: '' },
+      { serviceId: 'b', quantity: 1, note: '' },
+      { serviceId: 'c', quantity: 3, note: '' },
+    ]
+
+    const totals = computeCart(cart, services, VAT)
+
+    expect(totals.categorySubtotals).toHaveLength(2)
+    const cat1 = totals.categorySubtotals.find((s) => s.categoryId === 'cat-1')!
+    const cat2 = totals.categorySubtotals.find((s) => s.categoryId === 'cat-2')!
+
+    expect(cat1.totalSaleNet).toBe(130) // 50*2 + 30
+    expect(cat1.itemCount).toBe(3)
+    expect(cat1.lineCount).toBe(2)
+    expect(cat2.totalSaleNet).toBe(60) // 20*3
+    expect(cat2.itemCount).toBe(3)
+    expect(cat2.lineCount).toBe(1)
+  })
+
+  it('sums category subtotals to cart totals', () => {
+    const services = [
+      makeService({ id: 'a', categoryId: 'cat-1', purchasePrice: 10, salePrice: 50 }),
+      makeService({ id: 'b', categoryId: 'cat-2', purchasePrice: 5, salePrice: 30 }),
+    ]
+    const cart: CartItem[] = [
+      { serviceId: 'a', quantity: 1, note: '' },
+      { serviceId: 'b', quantity: 2, note: '' },
+    ]
+
+    const totals = computeCart(cart, services, VAT)
+
+    const subtotalSum = totals.categorySubtotals.reduce((s, c) => s + c.totalSaleNet, 0)
+    expect(subtotalSum).toBe(totals.totalSaleNet)
+    expect(totals.categorySubtotals.reduce((s, c) => s + c.totalCostNet, 0)).toBe(
+      totals.totalCostNet,
+    )
+    expect(totals.categorySubtotals.reduce((s, c) => s + c.itemCount, 0)).toBe(
+      totals.itemCount,
+    )
+  })
+
   it('returns overall profit margin across the cart', () => {
     const services = [makeService({ id: 'a', purchasePrice: 25, salePrice: 100 })]
     const cart: CartItem[] = [{ serviceId: 'a', quantity: 1, note: '' }]

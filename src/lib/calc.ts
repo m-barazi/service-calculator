@@ -1,4 +1,4 @@
-import type { CartItem, CartTotals, LineComputation, Service } from '../types'
+import type { CartDiscountType, CartItem, CartTotals, CategorySubtotal, LineComputation, Service } from '../types'
 
 export function computeLine(
   service: Service,
@@ -29,7 +29,7 @@ export function computeCart(
   cart: CartItem[],
   services: Service[],
   vatRate: number,
-  discountType?: import('../types').CartDiscountType,
+  discountType?: CartDiscountType,
   discountValue: number = 0,
 ): CartTotals {
   const serviceMap = new Map(services.map((s) => [s.id, s]))
@@ -51,6 +51,34 @@ export function computeCart(
   const totalSaleGross = lines.reduce((s, l) => s + l.totalSaleGross, 0)
   const itemCount = lines.reduce((s, l) => s + l.quantity, 0)
 
+  // Aggregate subtotals per category, preserving first-appearance order.
+  const categoryMap = new Map<string, CategorySubtotal>()
+  for (const line of lines) {
+    const id = line.service.categoryId
+    const existing = categoryMap.get(id)
+    if (existing) {
+      existing.totalCostNet += line.totalCostNet
+      existing.totalCostGross += line.totalCostGross
+      existing.totalSaleNet += line.totalSaleNet
+      existing.totalSaleGross += line.totalSaleGross
+      existing.profitNet += line.profitNet
+      existing.itemCount += line.quantity
+      existing.lineCount += 1
+    } else {
+      categoryMap.set(id, {
+        categoryId: id,
+        totalCostNet: line.totalCostNet,
+        totalCostGross: line.totalCostGross,
+        totalSaleNet: line.totalSaleNet,
+        totalSaleGross: line.totalSaleGross,
+        profitNet: line.profitNet,
+        itemCount: line.quantity,
+        lineCount: 1,
+      })
+    }
+  }
+  const categorySubtotals = Array.from(categoryMap.values())
+
   let discountAmount = 0
   if (discountType === 'percent') {
     discountAmount = totalSaleNet * (discountValue / 100)
@@ -67,6 +95,7 @@ export function computeCart(
 
   return {
     lines,
+    categorySubtotals,
     totalCostNet,
     totalCostGross,
     totalSaleNet,
