@@ -7,6 +7,7 @@ interface CustomerFormModalProps {
   open: boolean
   onClose: () => void
   customer?: Customer
+  onCreated?: (customer: Customer) => void
 }
 
 interface FormState {
@@ -44,7 +45,7 @@ function toForm(c: Customer): FormState {
   }
 }
 
-export function CustomerFormModal({ open, onClose, customer }: CustomerFormModalProps) {
+export function CustomerFormModal({ open, onClose, customer, onCreated }: CustomerFormModalProps) {
   const { addCustomer, updateCustomer } = useApp()
   const [form, setForm] = useState<FormState>(empty)
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -81,10 +82,12 @@ export function CustomerFormModal({ open, onClose, customer }: CustomerFormModal
     try {
       if (customer) {
         await updateCustomer(customer.id, buildPayload())
+        onClose()
       } else {
-        await addCustomer(buildPayload())
+        const created = await addCustomer(buildPayload())
+        onClose()
+        onCreated?.(created)
       }
-      onClose()
     } catch (error) {
       console.error('Failed to save customer:', error)
       setErrors({ submit: 'Speichern fehlgeschlagen. Bitte versuche erneut.' })

@@ -18,6 +18,7 @@ import { generateQuotePdf } from '../lib/quotePdf'
 import { filterQuotes } from '../lib/quoteFilter'
 import { formatEUR, formatDate, formatPriceInput, parseGermanNumber } from '../lib/format'
 import { ConfirmDialog } from '../components/ConfirmDialog'
+import { CustomerSelect } from '../components/CustomerSelect'
 import { Modal } from '../components/Modal'
 import type { Quote, QuoteItem, QuoteStatus, DiscountType, QuoteWithItems, QuoteTotals, Service, Category } from '../types'
 
@@ -54,7 +55,6 @@ export function AngebotePage() {
     deleteItem,
     services,
     categories,
-    customers,
     settings,
   } = useApp()
 
@@ -393,58 +393,24 @@ export function AngebotePage() {
                 <span className="mb-1.5 block text-sm font-medium text-ink-soft">
                   Kunde
                 </span>
-                <div className="relative mb-2">
-                  <select
-                    value={q.customerId ?? ''}
-                    onChange={(e) => {
-                      const customerId = e.target.value || undefined
-                      const customer = customerId
-                        ? customers.find((c) => c.id === customerId)
-                        : undefined
-                      handleQuoteChange({
-                        customerId,
-                        customerName: customer?.name,
-                      })
-                      setSelectedQuote((prev) =>
-                        prev
-                          ? {
-                              ...prev,
-                              customerId,
-                              customerName: customer?.name,
-                              customer,
-                            }
-                          : prev,
-                      )
-                    }}
-                    className="input appearance-none pr-10"
-                  >
-                    <option value="">Kunde auswählen…</option>
-                    {customers.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                        {c.city ? ` · ${c.city}` : ''}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted" />
-                </div>
-                <input
-                  type="text"
-                  value={q.customerName ?? ''}
-                  onChange={(e) =>
+                <CustomerSelect
+                  value={q.customer}
+                  onChange={(customer) => {
+                    handleQuoteChange({
+                      customerId: customer?.id,
+                      customerName: customer?.name,
+                    })
                     setSelectedQuote((prev) =>
                       prev
-                        ? { ...prev, customerName: e.target.value || undefined }
+                        ? {
+                            ...prev,
+                            customerId: customer?.id,
+                            customerName: customer?.name,
+                            customer,
+                          }
                         : prev,
                     )
-                  }
-                  onBlur={(e) =>
-                    handleQuoteChange({
-                      customerName: e.target.value || undefined,
-                    })
-                  }
-                  className="input"
-                  placeholder="Kundenname (manuell oder überschreiben)"
+                  }}
                 />
               </label>
 
