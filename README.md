@@ -16,8 +16,12 @@ Eine moderne Web-App zur Berechnung von Dienstleistungskosten, Verwaltung von Pr
 - **Detail-Ansicht** mit Kundenname, Projekttitel und PDF-Bericht
 - **Preisliste verwalten** — anlegen, bearbeiten, löschen, klonen, ein-/ausblenden
 - **Kategorien verwalten** — mit Farbe, Icon, Reihenfolge und Sichtbarkeit
-- **Angebote erstellen** — aus dem Warenkorb oder von Grund auf, mit Rabatt, Gültigkeitsdatum und Status
-- **Angebots-PDF** — Kunden- und interne Version
+- **Angebote erstellen** — aus dem Warenkorb oder von Grund auf, mit Rabatt, Gültigkeitsdatum, Status und Kundenverknüpfung
+- **Angebots-PDF** — Kunden- und interne Version inkl. Kundenadresse
+- **Kundenstammdaten** — Adressen, Kontaktdaten und Notizen verwalten
+- **Warenkorb → Angebot** — ausgewählte Leistungen direkt in ein Angebot überführen
+- **Angebots-Suche & Filter** — nach Titel, Nummer, Kunde und Status filtern
+- **Dashboard** — Kennzahlen, Umsatz, Status-Verteilung und Top-Leistungen
 - **Mehrwertsteuer** stufenlos einstellbar (0–30 %)
 - **Dark Mode** (Hell / Dunkel / System)
 - **Backup** als JSON exportieren und wieder einspielen
@@ -164,6 +168,7 @@ docker compose up --build -d
 | Leistungen | PostgreSQL (`services`) | Name, Kategorie, Einkaufs-/Verkaufspreis, Sichtbarkeit |
 | Kategorien | PostgreSQL (`categories`) | Name, Beschreibung, Icon, Farbe, Sortierung |
 | Angebote | PostgreSQL (`quotes`, `quote_items`) | Titel, Kunde, Status, Rabatt, Positionen |
+| Kunden | PostgreSQL (`customers`) | Name, Adresse, E-Mail, Telefon, Notizen |
 | Warenkorb | `localStorage` (`sc.cart.v1`) | `{ serviceId: { quantity, note } }` |
 | Einstellungen | `localStorage` (`sc.settings.v1`) | MwSt., Firma, Theme |
 
@@ -199,6 +204,9 @@ Basis-URL: `/api`
 | `/quotes/:id/items` | GET (implizit), POST |
 | `/quotes/:id/items/:itemId` | PUT, DELETE |
 | `/quotes/:id/items/reorder` | PATCH |
+| `/customers` | GET, POST |
+| `/customers/:id` | GET, PUT, DELETE |
+| `/dashboard` | GET |
 | `/seed` | POST |
 | `/health` | GET |
 
@@ -216,7 +224,7 @@ Basis-URL: `/api`
 │   ├── components/          # UI-Bausteine
 │   ├── hooks/               # useApp (Global State), useTheme
 │   ├── lib/                 # api, calc, format, pdf, storage
-│   ├── pages/               # Seiten (Rechner, Angebote, Kategorien, Preisliste, Einstellungen)
+│   ├── pages/               # Seiten (Rechner, Angebote, Kunden, Kategorien, Preisliste, Dashboard, Einstellungen)
 │   ├── App.tsx              # Routes
 │   ├── main.tsx             # Entry
 │   ├── index.css            # Tailwind + Design-Tokens
