@@ -50,6 +50,16 @@ function itemName(item: QuoteWithItems['items'][number]): string {
   return '—'
 }
 
+export function formatCustomerAddress(customer: QuoteWithItems['customer']): string {
+  if (!customer) return ''
+  const parts = [
+    customer.street,
+    [customer.zip, customer.city].filter(Boolean).join(' '),
+    customer.country,
+  ].filter(Boolean)
+  return parts.join('\n')
+}
+
 function discountLabel(quote: QuoteWithItems): string {
   if (quote.discountType === 'percent') {
     return `Rabatt (-${quote.discountValue}%)`
@@ -124,14 +134,16 @@ export function generateQuotePdf(
   doc.text(titleText, M, y)
   y += 12
 
-  // Customer line
-  const customerName = opts.customerName || quote.customerName
-  if (customerName) {
+  // Customer block
+  const customerName = opts.customerName || quote.customerName || quote.customer?.name
+  const customerAddress = formatCustomerAddress(quote.customer)
+  if (customerName || customerAddress) {
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(10.5)
     doc.setTextColor(INK_SOFT[0], INK_SOFT[1], INK_SOFT[2])
-    doc.text(`Kunde: ${customerName}`, M, y + 14)
-    y += 22
+    const lines = [customerName ? `Kunde: ${customerName}` : 'Kunde:', customerAddress].filter(Boolean)
+    doc.text(lines, M, y + 14)
+    y += 14 + lines.length * 13
   } else {
     y += 8
   }

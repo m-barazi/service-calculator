@@ -11,6 +11,7 @@ interface DetailsModalProps {
   onClose: () => void
   totals: CartTotals
   settings: Settings
+  onCreateQuote?: () => void
 }
 
 export function DetailsModal({
@@ -18,6 +19,7 @@ export function DetailsModal({
   onClose,
   totals,
   settings,
+  onCreateQuote,
 }: DetailsModalProps) {
   const { setNote, categories } = useApp()
   const [customerName, setCustomerName] = useState('')
@@ -119,6 +121,16 @@ export function DetailsModal({
                 </p>
               </div>
             </label>
+
+            {onCreateQuote && (
+              <button
+                onClick={onCreateQuote}
+                className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-canvas/40 px-4 py-3 text-sm font-medium text-ink transition hover:border-border-strong hover:bg-canvas"
+              >
+                <FileText className="h-4 w-4" />
+                Als Angebot speichern
+              </button>
+            )}
           </section>
 
           {/* Line items */}

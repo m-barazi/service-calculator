@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useMemo, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import {
   ArrowLeft,
   ChevronDown,
@@ -11,6 +11,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react'
+import { useSearchParams } from 'react-router-dom'
 import { useApp } from '../hooks/useApp'
 import { computeQuoteTotals, getItemName } from '../lib/quoteCalc'
 import { generateQuotePdf } from '../lib/quotePdf'
@@ -52,9 +53,11 @@ export function AngebotePage() {
     deleteItem,
     services,
     categories,
+    customers,
     settings,
   } = useApp()
 
+  const [searchParams, setSearchParams] = useSearchParams()
   const [selectedQuote, setSelectedQuote] = useState<QuoteWithItems | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<Quote | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
@@ -63,6 +66,29 @@ export function AngebotePage() {
   const [itemSearch, setItemSearch] = useState('')
   const [freeName, setFreeName] = useState('')
   const [freePrice, setFreePrice] = useState('')
+  const [quoteSearch, setQuoteSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState<QuoteStatus | 'all'>('all')
+
+  // ── Filter quotes ───────────────────────────────────────────────────────
+  const filteredQuotes = useMemo(() => {
+    const q = quoteSearch.trim().toLowerCase()
+    return quotes.filter((quote) => {
+      if (statusFilter !== 'all' && quote.status !== statusFilter) return false
+      if (!q) return true
+      const haystack = [
+        quote.title,
+        quote.quoteNumber,
+        quote.customerName,
+        quote.customer?.name,
+        quote.customer?.email,
+        quote.customer?.city,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+      return haystack.includes(q)
+    })
+  }, [quotes, quoteSearch, statusFilter])
 
   // ── Computed totals for selected quote ──────────────────────────────────
   const totals: QuoteTotals | null = useMemo(() => {
@@ -80,6 +106,18 @@ export function AngebotePage() {
     const detail = await fetchQuoteDetail(id)
     setSelectedQuote(detail)
   }, [fetchQuoteDetail])
+
+  // Open quote from URL query param once quotes are loaded
+  useEffect(() => {
+    const id = searchParams.get('id')
+    if (!id) return
+    if (isLoadingQuotes) return
+    const exists = quotes.some((q) => q.id === id)
+    if (!exists) return
+    openQuote(id).catch(() => {})
+    setSearchParams({}, { replace: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, isLoadingQuotes, quotes])
 
   // ── Create new quote ────────────────────────────────────────────────────
   const handleCreateQuote = useCallback(async () => {
@@ -364,11 +402,46 @@ export function AngebotePage() {
                 />
               </label>
 
-              {/* Customer name */}
+              {/* Customer */}
               <label className="block">
                 <span className="mb-1.5 block text-sm font-medium text-ink-soft">
                   Kunde
                 </span>
+                <div className="relative mb-2">
+                  <select
+                    value={q.customerId ?? ''}
+                    onChange={(e) => {
+                      const customerId = e.target.value || undefined
+                      const customer = customerId
+                        ? customers.find((c) => c.id === customerId)
+                        : undefined
+                      handleQuoteChange({
+                        customerId,
+                        customerName: customer?.name,
+                      })
+                      setSelectedQuote((prev) =>
+                        prev
+                          ? {
+                              ...prev,
+                              customerId,
+                              customerName: customer?.name,
+                              customer,
+                            }
+                          : prev,
+                      )
+                    }}
+                    className="input appearance-none pr-10"
+                  >
+                    <option value="">Kunde auswählen…</option>
+                    {customers.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                        {c.city ? ` · ${c.city}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted" />
+                </div>
                 <input
                   type="text"
                   value={q.customerName ?? ''}
@@ -385,7 +458,7 @@ export function AngebotePage() {
                     })
                   }
                   className="input"
-                  placeholder="Kundenname"
+                  placeholder="Kundenname (manuell oder überschreiben)"
                 />
               </label>
 
@@ -645,6 +718,46 @@ export function AngebotePage() {
         </button>
       </div>
 
+      {/* Search & filter */}
+      {quotes.length > 0 && (
+        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="relative flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted" />
+            <input
+              type="text"
+              value={quoteSearch}
+              onChange={(e) => setQuoteSearch(e.target.value)}
+              placeholder="Angebote suchen (Titel, Nummer, Kunde)..."
+              className="input w-full pl-10"
+            />
+            {quoteSearch && (
+              <button
+                onClick={() => setQuoteSearch('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 qty-btn"
+                aria-label="Suche löschen"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            <FilterChip
+              label="Alle"
+              active={statusFilter === 'all'}
+              onClick={() => setStatusFilter('all')}
+            />
+            {STATUS_OPTIONS.map((opt) => (
+              <FilterChip
+                key={opt.value}
+                label={opt.label}
+                active={statusFilter === opt.value}
+                onClick={() => setStatusFilter(opt.value)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Quote cards */}
       {quotes.length === 0 ? (
         <div className="card flex flex-col items-center justify-center gap-2 p-12 text-center">
@@ -660,9 +773,17 @@ export function AngebotePage() {
             Erstes Angebot erstellen
           </button>
         </div>
+      ) : filteredQuotes.length === 0 ? (
+        <div className="card flex flex-col items-center justify-center gap-2 p-12 text-center">
+          <Search className="h-8 w-8 text-ink-muted" strokeWidth={1.5} />
+          <p className="mt-2 text-sm font-medium text-ink">Keine Treffer</p>
+          <p className="text-2xs text-ink-muted">
+            Passe die Suche oder den Status-Filter an.
+          </p>
+        </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {quotes.map((quote) => {
+          {filteredQuotes.map((quote) => {
             const statusInfo = STATUS_MAP[quote.status] ?? STATUS_MAP.draft
             return (
               <div
@@ -793,6 +914,30 @@ function ItemRow({
         <Trash2 className="h-3.5 w-3.5" />
       </button>
     </div>
+  )
+}
+
+function FilterChip({
+  label,
+  active,
+  onClick,
+}: {
+  label: string
+  active: boolean
+  onClick: () => void
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={[
+        'rounded-full border px-3 py-1.5 text-xs font-medium transition-all',
+        active
+          ? 'border-ink bg-ink text-canvas'
+          : 'border-border bg-surface text-ink-soft hover:border-border-strong hover:text-ink',
+      ].join(' ')}
+    >
+      {label}
+    </button>
   )
 }
 

@@ -87,11 +87,27 @@ export interface CartTotals {
 export type QuoteStatus = 'draft' | 'sent' | 'accepted' | 'rejected'
 export type DiscountType = 'percent' | 'amount'
 
+export interface Customer {
+  id: string
+  name: string
+  email?: string
+  phone?: string
+  street?: string
+  zip?: string
+  city?: string
+  country?: string
+  notes?: string
+  createdAt: string
+  updatedAt: string
+}
+
 export interface Quote {
   id: string
   quoteNumber?: string
   title: string
   customerName?: string
+  customerId?: string
+  customer?: Customer
   status: QuoteStatus
   discountType?: DiscountType
   discountValue: number
@@ -133,4 +149,14 @@ export interface QuoteLineComputation {
   service?: Service
   lineNet: number
   lineGross: number
+}
+
+export interface DashboardData {
+  quoteCount: number
+  quoteStatusCounts: Record<QuoteStatus, number>
+  acceptedTotalGross: number
+  acceptedTotalNet: number
+  estimatedMonthlyRecurring: number
+  topServices: Array<{ serviceId: string; name: string; count: number; totalGross: number }>
+  recentQuotes: Quote[]
 }

@@ -50,6 +50,22 @@ function toCamelCategory(row) {
   };
 }
 
+function toCamelCustomer(row) {
+  return {
+    id: row.id,
+    name: row.name,
+    email: row.email,
+    phone: row.phone,
+    street: row.street,
+    zip: row.zip,
+    city: row.city,
+    country: row.country,
+    notes: row.notes,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
 app.get('/api/services', async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM services ORDER BY pinned DESC, category_id, name');
@@ -218,6 +234,105 @@ app.put('/api/categories/:id', async (req, res) => {
   }
 });
 
+// ── Customer CRUD ───────────────────────────────────────────────────────
+
+app.get('/api/customers', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM customers ORDER BY name');
+    res.json(result.rows.map(toCamelCustomer));
+  } catch (error) {
+    console.error('Error fetching customers:', error);
+    res.status(500).json({ error: 'Failed to fetch customers' });
+  }
+});
+
+app.get('/api/customers/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.query('SELECT * FROM customers WHERE id = $1', [id]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Customer not found' });
+    }
+    res.json(toCamelCustomer(result.rows[0]));
+  } catch (error) {
+    console.error('Error fetching customer:', error);
+    res.status(500).json({ error: 'Failed to fetch customer' });
+  }
+});
+
+app.post('/api/customers', async (req, res) => {
+  try {
+    const { name, email, phone, street, zip, city, country, notes } = req.body;
+    if (!name) {
+      return res.status(400).json({ error: 'Name is required' });
+    }
+    const result = await pool.query(
+      `INSERT INTO customers (name, email, phone, street, zip, city, country, notes, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
+       RETURNING *`,
+      [name, email || null, phone || null, street || null, zip || null, city || null, country || null, notes || null]
+    );
+    res.status(201).json(toCamelCustomer(result.rows[0]));
+  } catch (error) {
+    console.error('Error creating customer:', error);
+    res.status(500).json({ error: 'Failed to create customer' });
+  }
+});
+
+app.put('/api/customers/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, email, phone, street, zip, city, country, notes } = req.body;
+
+    const sets = [];
+    const vals = [];
+    let idx = 1;
+
+    if (name !== undefined) { sets.push(`name = $${idx++}`); vals.push(name); }
+    if (email !== undefined) { sets.push(`email = $${idx++}`); vals.push(email); }
+    if (phone !== undefined) { sets.push(`phone = $${idx++}`); vals.push(phone); }
+    if (street !== undefined) { sets.push(`street = $${idx++}`); vals.push(street); }
+    if (zip !== undefined) { sets.push(`zip = $${idx++}`); vals.push(zip); }
+    if (city !== undefined) { sets.push(`city = $${idx++}`); vals.push(city); }
+    if (country !== undefined) { sets.push(`country = $${idx++}`); vals.push(country); }
+    if (notes !== undefined) { sets.push(`notes = $${idx++}`); vals.push(notes); }
+
+    sets.push(`updated_at = NOW()`);
+    vals.push(id);
+
+    const result = await pool.query(
+      `UPDATE customers SET ${sets.join(', ')} WHERE id = $${idx} RETURNING *`,
+      vals
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Customer not found' });
+    }
+    res.json(toCamelCustomer(result.rows[0]));
+  } catch (error) {
+    console.error('Error updating customer:', error);
+    res.status(500).json({ error: 'Failed to update customer' });
+  }
+});
+
+app.delete('/api/customers/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const refCheck = await pool.query('SELECT COUNT(*) FROM quotes WHERE customer_id = $1', [id]);
+    const quoteCount = parseInt(refCheck.rows[0].count);
+    if (quoteCount > 0) {
+      return res.status(409).json({ error: 'Customer has associated quotes', quoteCount });
+    }
+    const result = await pool.query('DELETE FROM customers WHERE id = $1 RETURNING *', [id]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Customer not found' });
+    }
+    res.status(204).send();
+  } catch (error) {
+    console.error('Error deleting customer:', error);
+    res.status(500).json({ error: 'Failed to delete customer' });
+  }
+});
+
 app.delete('/api/categories/:id', async (req, res) => {
   try {
     const { id } = req.params;
@@ -240,11 +355,12 @@ app.delete('/api/categories/:id', async (req, res) => {
 // ── Quote CRUD ───────────────────────────────────────────────────────────
 
 function toCamelQuote(row) {
-  return {
+  const quote = {
     id: row.id,
     quoteNumber: row.quote_number,
     title: row.title,
     customerName: row.customer_name,
+    customerId: row.customer_id,
     status: row.status,
     discountType: row.discount_type,
     discountValue: parseFloat(row.discount_value ?? 0),
@@ -253,6 +369,10 @@ function toCamelQuote(row) {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
+  if (row.customer_id && row.customer_name) {
+    quote.customer = toCamelCustomer(row);
+  }
+  return quote;
 }
 
 function toCamelQuoteItem(row) {
@@ -287,7 +407,16 @@ app.get('/api/quotes', async (req, res) => {
 app.get('/api/quotes/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const quoteResult = await pool.query('SELECT * FROM quotes WHERE id = $1', [id]);
+    const quoteResult = await pool.query(
+      `SELECT q.*, c.name as customer_name, c.email as customer_email, c.phone as customer_phone,
+              c.street as customer_street, c.zip as customer_zip, c.city as customer_city,
+              c.country as customer_country, c.notes as customer_notes,
+              c.created_at as customer_created_at, c.updated_at as customer_updated_at
+       FROM quotes q
+       LEFT JOIN customers c ON q.customer_id = c.id
+       WHERE q.id = $1`,
+      [id]
+    );
     if (quoteResult.rows.length === 0) {
       return res.status(404).json({ error: 'Quote not found' });
     }
@@ -329,16 +458,16 @@ async function generateQuoteNumber() {
 
 app.post('/api/quotes', async (req, res) => {
   try {
-    const { title, customerName, status, discountType, discountValue, notes, validUntil } = req.body;
+    const { title, customerId, customerName, status, discountType, discountValue, notes, validUntil } = req.body;
     if (!title) {
       return res.status(400).json({ error: 'Title is required' });
     }
     const quoteNumber = await generateQuoteNumber();
     const result = await pool.query(
-      `INSERT INTO quotes (quote_number, title, customer_name, status, discount_type, discount_value, notes, valid_until, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
+      `INSERT INTO quotes (quote_number, title, customer_id, customer_name, status, discount_type, discount_value, notes, valid_until, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())
        RETURNING *`,
-      [quoteNumber, title, customerName || null, status || 'draft', discountType || null, discountValue ?? 0, notes || null, validUntil || null]
+      [quoteNumber, title, customerId || null, customerName || null, status || 'draft', discountType || null, discountValue ?? 0, notes || null, validUntil || null]
     );
     res.status(201).json(toCamelQuote(result.rows[0]));
   } catch (error) {
@@ -350,13 +479,14 @@ app.post('/api/quotes', async (req, res) => {
 app.put('/api/quotes/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, customerName, status, discountType, discountValue, notes, validUntil } = req.body;
+    const { title, customerId, customerName, status, discountType, discountValue, notes, validUntil } = req.body;
 
     const sets = [];
     const vals = [];
     let idx = 1;
 
     if (title !== undefined) { sets.push(`title = $${idx++}`); vals.push(title); }
+    if (customerId !== undefined) { sets.push(`customer_id = $${idx++}`); vals.push(customerId); }
     if (customerName !== undefined) { sets.push(`customer_name = $${idx++}`); vals.push(customerName); }
     if (status !== undefined) { sets.push(`status = $${idx++}`); vals.push(status); }
     if (discountType !== undefined) { sets.push(`discount_type = $${idx++}`); vals.push(discountType); }
@@ -408,12 +538,13 @@ app.post('/api/quotes/:id/duplicate', async (req, res) => {
 
     const quoteNumber = await generateQuoteNumber();
     const newQuoteResult = await pool.query(
-      `INSERT INTO quotes (quote_number, title, customer_name, status, discount_type, discount_value, notes, valid_until, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
+      `INSERT INTO quotes (quote_number, title, customer_id, customer_name, status, discount_type, discount_value, notes, valid_until, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())
        RETURNING *`,
       [
         quoteNumber,
         `${original.title} (Kopie)`,
+        original.customer_id,
         original.customer_name,
         'draft',
         original.discount_type,
@@ -554,6 +685,113 @@ app.patch('/api/quotes/:id/items/reorder', async (req, res) => {
   }
 });
 
+// ── Dashboard ───────────────────────────────────────────────────────────
+
+app.get('/api/dashboard', async (req, res) => {
+  try {
+    const vatRate = parseFloat(req.query.vatRate) || 0.19;
+    const vatFactor = 1 + vatRate;
+
+    const [quotesResult, itemsResult, recentResult] = await Promise.all([
+      pool.query('SELECT * FROM quotes'),
+      pool.query(`
+        SELECT qi.*, s.name as service_name, s.purchase_price as service_purchase_price,
+               s.sale_price as service_sale_price, s.category_id as service_category_id
+        FROM quote_items qi
+        LEFT JOIN services s ON qi.service_id = s.id
+      `),
+      pool.query(`
+        SELECT q.*, c.name as customer_name, c.email as customer_email, c.phone as customer_phone,
+               c.street as customer_street, c.zip as customer_zip, c.city as customer_city,
+               c.country as customer_country, c.notes as customer_notes,
+               c.created_at as customer_created_at, c.updated_at as customer_updated_at
+        FROM quotes q
+        LEFT JOIN customers c ON q.customer_id = c.id
+        ORDER BY q.created_at DESC
+        LIMIT 5
+      `),
+    ]);
+
+    const quotes = quotesResult.rows.map(toCamelQuote);
+    const allItems = itemsResult.rows.map(toCamelQuoteItem);
+    const recentQuotes = recentResult.rows.map(toCamelQuote);
+
+    const quoteCount = quotes.length;
+    const quoteStatusCounts = { draft: 0, sent: 0, accepted: 0, rejected: 0 };
+
+    let acceptedTotalNet = 0;
+    let acceptedTotalGross = 0;
+
+    for (const quote of quotes) {
+      quoteStatusCounts[quote.status] = (quoteStatusCounts[quote.status] || 0) + 1;
+      if (quote.status !== 'accepted') continue;
+
+      const items = allItems.filter((i) => i.quoteId === quote.id);
+      let subtotal = 0;
+      for (const item of items) {
+        subtotal += item.quantity * item.unitPrice;
+      }
+
+      let discountAmount = 0;
+      if (quote.discountType === 'percent') {
+        discountAmount = subtotal * (quote.discountValue / 100);
+      } else if (quote.discountType === 'amount') {
+        discountAmount = quote.discountValue;
+      }
+      const totalNet = Math.max(0, subtotal - discountAmount);
+      const totalGross = totalNet * vatFactor;
+
+      acceptedTotalNet += totalNet;
+      acceptedTotalGross += totalGross;
+    }
+
+    // Top services by appearance in quotes
+    const serviceMap = new Map();
+    for (const item of allItems) {
+      const sid = item.serviceId || item.customName || 'custom';
+      const name = item.service ? item.service.name : (item.customName || 'Freitext');
+      const existing = serviceMap.get(sid) || { serviceId: sid, name, count: 0, totalGross: 0 };
+      existing.count += item.quantity;
+      existing.totalGross += item.quantity * item.unitPrice * vatFactor;
+      serviceMap.set(sid, existing);
+    }
+    const topServices = Array.from(serviceMap.values())
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5);
+
+    // Estimated monthly recurring: accepted gross from last 90 days, annualized to monthly
+    const now = new Date();
+    const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+    let accepted90DayGross = 0;
+    for (const quote of quotes) {
+      if (quote.status !== 'accepted') continue;
+      const created = new Date(quote.createdAt);
+      if (created < ninetyDaysAgo) continue;
+      const items = allItems.filter((i) => i.quoteId === quote.id);
+      let subtotal = 0;
+      for (const item of items) subtotal += item.quantity * item.unitPrice;
+      let discountAmount = 0;
+      if (quote.discountType === 'percent') discountAmount = subtotal * (quote.discountValue / 100);
+      else if (quote.discountType === 'amount') discountAmount = quote.discountValue;
+      accepted90DayGross += Math.max(0, subtotal - discountAmount) * vatFactor;
+    }
+    const estimatedMonthlyRecurring = accepted90DayGross / 3;
+
+    res.json({
+      quoteCount,
+      quoteStatusCounts,
+      acceptedTotalNet,
+      acceptedTotalGross,
+      estimatedMonthlyRecurring,
+      topServices,
+      recentQuotes,
+    });
+  } catch (error) {
+    console.error('Error fetching dashboard:', error);
+    res.status(500).json({ error: 'Failed to fetch dashboard' });
+  }
+});
+
 // ── Seed ────────────────────────────────────────────────────────────────
 
 app.post('/api/seed', async (req, res) => {
@@ -633,11 +871,31 @@ async function ensureTables() {
   `);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_services_pinned ON services(pinned DESC)`);
 
+  // Customers table
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS customers (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      name TEXT NOT NULL,
+      email TEXT,
+      phone TEXT,
+      street TEXT,
+      zip TEXT,
+      city TEXT,
+      country TEXT DEFAULT 'Deutschland',
+      notes TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_customers_name ON customers(name)`);
+
+  // Quotes table
   await pool.query(`
     CREATE TABLE IF NOT EXISTS quotes (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       quote_number VARCHAR(20) UNIQUE,
       title TEXT NOT NULL DEFAULT 'Neues Angebot',
+      customer_id UUID REFERENCES customers(id) ON DELETE SET NULL,
       customer_name TEXT,
       status TEXT NOT NULL DEFAULT 'draft',
       discount_type TEXT,
@@ -652,6 +910,7 @@ async function ensureTables() {
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_quotes_created ON quotes(created_at DESC)`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_quotes_quote_number ON quotes(quote_number)`);
 
+  // Quote items table
   await pool.query(`
     CREATE TABLE IF NOT EXISTS quote_items (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -667,6 +926,13 @@ async function ensureTables() {
     )
   `);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_quote_items_quote ON quote_items(quote_id, sort_order)`);
+
+  // Migration: add customer_id to existing quotes tables
+  await pool.query(`
+    ALTER TABLE quotes
+    ADD COLUMN IF NOT EXISTS customer_id UUID REFERENCES customers(id) ON DELETE SET NULL
+  `);
+
   console.log('Database tables ensured');
 }
 

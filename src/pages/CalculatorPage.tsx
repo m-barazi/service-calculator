@@ -5,6 +5,7 @@ import { computeCart } from '../lib/calc'
 import { ServiceRow } from '../components/ServiceRow'
 import { SummaryPanel } from '../components/SummaryPanel'
 import { DetailsModal } from '../components/DetailsModal'
+import { CreateQuoteFromCartModal } from '../components/CreateQuoteFromCartModal'
 import { formatEUR } from '../lib/format'
 
 export function CalculatorPage() {
@@ -23,6 +24,7 @@ export function CalculatorPage() {
   const [activeCategory, setActiveCategory] = useState<string | null>(null)
   const [showPrices, setShowPrices] = useState(true)
   const [detailsOpen, setDetailsOpen] = useState(false)
+  const [createQuoteOpen, setCreateQuoteOpen] = useState(false)
 
   // Visible services first, then by category
   const visibleServices = useMemo(
@@ -240,6 +242,7 @@ export function CalculatorPage() {
           <SummaryPanel
             totals={totals}
             onShowDetails={() => setDetailsOpen(true)}
+            onCreateQuote={() => setCreateQuoteOpen(true)}
             onClear={clearCart}
           />
         </div>
@@ -273,6 +276,16 @@ export function CalculatorPage() {
         onClose={() => setDetailsOpen(false)}
         totals={totals}
         settings={settings}
+        onCreateQuote={() => {
+          setDetailsOpen(false)
+          setCreateQuoteOpen(true)
+        }}
+      />
+
+      <CreateQuoteFromCartModal
+        open={createQuoteOpen}
+        onClose={() => setCreateQuoteOpen(false)}
+        defaultTitle="Angebot"
       />
     </div>
   )

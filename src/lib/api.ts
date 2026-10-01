@@ -1,5 +1,5 @@
 /// <reference types="vite/client" />
-import type { Service, Category, Quote, QuoteItem, QuoteWithItems } from '../types'
+import type { Service, Category, Customer, Quote, QuoteItem, QuoteWithItems, DashboardData } from '../types'
 
 const API_URL = import.meta.env.VITE_API_URL || '/api'
 
@@ -118,6 +118,46 @@ export async function deleteCategory(id: string): Promise<void> {
   if (!res.ok && res.status !== 204) throw new Error(await extractError(res, 'Kategorie konnte nicht gelöscht werden'))
 }
 
+// ===== Customer API =====
+
+export async function fetchCustomers(): Promise<Customer[]> {
+  const res = await fetch(`${API_URL}/customers`)
+  if (!res.ok) throw new Error(await extractError(res, 'Kunden konnten nicht geladen werden'))
+  const data = await res.json()
+  return data.map(toCamelCustomer)
+}
+
+export async function createCustomer(customer: Omit<Customer, 'id' | 'createdAt' | 'updatedAt'>): Promise<Customer> {
+  const res = await fetch(`${API_URL}/customers`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(customer),
+  })
+  if (!res.ok) throw new Error(await extractError(res, 'Kunde konnte nicht erstellt werden'))
+  const data = await res.json()
+  return toCamelCustomer(data)
+}
+
+export async function updateCustomer(id: string, patch: Partial<Customer>): Promise<Customer> {
+  const res = await fetch(`${API_URL}/customers/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  })
+  if (!res.ok) throw new Error(await extractError(res, 'Kunde konnte nicht aktualisiert werden'))
+  const data = await res.json()
+  return toCamelCustomer(data)
+}
+
+export async function deleteCustomer(id: string): Promise<void> {
+  const res = await fetch(`${API_URL}/customers/${id}`, { method: 'DELETE' })
+  if (res.status === 409) {
+    const data = await res.json().catch(() => ({}))
+    throw new Error(data.error || 'Kunde wird noch von Angeboten verwendet')
+  }
+  if (!res.ok && res.status !== 204) throw new Error(await extractError(res, 'Kunde konnte nicht gelöscht werden'))
+}
+
 // ===== Bulk Import =====
 
 export async function importBackup(
@@ -198,12 +238,29 @@ export async function importBackup(
 
 // ===== Quote API =====
 
-function toCamelQuote(row: any): Quote {
+function toCamelCustomer(row: any): Customer {
   return {
+    id: row.id,
+    name: row.name,
+    email: row.email ?? undefined,
+    phone: row.phone ?? undefined,
+    street: row.street ?? undefined,
+    zip: row.zip ?? undefined,
+    city: row.city ?? undefined,
+    country: row.country ?? undefined,
+    notes: row.notes ?? undefined,
+    createdAt: row.created_at ?? row.createdAt,
+    updatedAt: row.updated_at ?? row.updatedAt,
+  }
+}
+
+function toCamelQuote(row: any): Quote {
+  const quote: Quote = {
     id: row.id,
     quoteNumber: row.quote_number ?? row.quoteNumber,
     title: row.title,
     customerName: row.customer_name ?? row.customerName,
+    customerId: row.customer_id ?? row.customerId,
     status: row.status,
     discountType: row.discount_type ?? row.discountType,
     discountValue: parseFloat(row.discount_value ?? row.discountValue ?? 0),
@@ -212,6 +269,10 @@ function toCamelQuote(row: any): Quote {
     createdAt: row.created_at ?? row.createdAt,
     updatedAt: row.updated_at ?? row.updatedAt,
   }
+  if (row.customer_id && row.customer_name !== undefined) {
+    quote.customer = toCamelCustomer(row)
+  }
+  return quote
 }
 
 function toCamelQuoteItem(row: any): QuoteItem {
@@ -317,4 +378,12 @@ export async function reorderQuoteItems(quoteId: string, itemIds: string[]): Pro
     body: JSON.stringify({ itemIds }),
   })
   if (!res.ok) throw new Error(await extractError(res, 'Positionen konnten nicht neu sortiert werden'))
+}
+
+// ===== Dashboard API =====
+
+export async function fetchDashboard(vatRate: number): Promise<DashboardData> {
+  const res = await fetch(`${API_URL}/dashboard?vatRate=${vatRate}`)
+  if (!res.ok) throw new Error(await extractError(res, 'Dashboard-Daten konnten nicht geladen werden'))
+  return res.json()
 }

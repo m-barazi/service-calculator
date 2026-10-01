@@ -1,14 +1,15 @@
-import { ReceiptText, Sparkles, Trash2 } from 'lucide-react'
+import { FileText, ReceiptText, Sparkles, Trash2 } from 'lucide-react'
 import type { CartTotals } from '../types'
 import { formatEUR, formatPct } from '../lib/format'
 
 interface SummaryPanelProps {
   totals: CartTotals
   onShowDetails: () => void
+  onCreateQuote: () => void
   onClear: () => void
 }
 
-export function SummaryPanel({ totals, onShowDetails, onClear }: SummaryPanelProps) {
+export function SummaryPanel({ totals, onShowDetails, onCreateQuote, onClear }: SummaryPanelProps) {
   const isEmpty = totals.lines.length === 0
 
   return (
@@ -88,6 +89,14 @@ export function SummaryPanel({ totals, onShowDetails, onClear }: SummaryPanelPro
         >
           <Sparkles className="h-4 w-4" />
           Details &amp; PDF
+        </button>
+        <button
+          onClick={onCreateQuote}
+          disabled={isEmpty}
+          className="btn-secondary w-full"
+        >
+          <FileText className="h-4 w-4" />
+          Angebot erstellen
         </button>
         <button
           onClick={onClear}

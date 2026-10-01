@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import type { Service, Settings, Category, Quote, QuoteWithItems } from '../types'
+import type { Service, Settings, Category, Customer, Quote, QuoteWithItems, QuoteItem } from '../types'
 import {
   loadCart,
   loadSettings,
@@ -23,6 +23,10 @@ import {
   createCategory,
   updateCategory as updateCategoryApi,
   deleteCategory as deleteCategoryApi,
+  fetchCustomers,
+  createCustomer,
+  updateCustomer as updateCustomerApi,
+  deleteCustomer as deleteCustomerApi,
   fetchQuotes,
   createQuote as createQuoteApi,
   updateQuote as updateQuoteApi,
@@ -65,6 +69,14 @@ interface AppState {
   deleteCategory: (id: string) => Promise<void>
   refreshCategories: () => Promise<void>
 
+  // Customers (loaded from API)
+  customers: Customer[]
+  isLoadingCustomers: boolean
+  addCustomer: (c: Omit<Customer, 'id' | 'createdAt' | 'updatedAt'>) => Promise<Customer>
+  updateCustomer: (id: string, patch: Partial<Customer>) => Promise<void>
+  deleteCustomer: (id: string) => Promise<void>
+  refreshCustomers: () => Promise<void>
+
   // Quotes (loaded from API)
   quotes: Quote[]
   isLoadingQuotes: boolean
@@ -74,9 +86,10 @@ interface AppState {
   duplicateQuote: (id: string) => Promise<Quote>
   refreshQuotes: () => Promise<void>
   fetchQuoteDetail: (id: string) => Promise<QuoteWithItems>
-  addItem: (quoteId: string, item: Omit<import('../types').QuoteItem, 'id' | 'quoteId' | 'createdAt' | 'updatedAt'>) => Promise<import('../types').QuoteItem>
-  updateItem: (quoteId: string, itemId: string, patch: Partial<import('../types').QuoteItem>) => Promise<void>
+  addItem: (quoteId: string, item: Omit<QuoteItem, 'id' | 'quoteId' | 'createdAt' | 'updatedAt'>) => Promise<QuoteItem>
+  updateItem: (quoteId: string, itemId: string, patch: Partial<QuoteItem>) => Promise<void>
   deleteItem: (quoteId: string, itemId: string) => Promise<void>
+  createQuoteFromCart: (title: string, customerId?: string) => Promise<Quote>
 }
 
 const AppContext = createContext<AppState | null>(null)
@@ -87,6 +100,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true)
   const [categories, setCategories] = useState<Category[]>([])
   const [isLoadingCategories, setIsLoadingCategories] = useState(true)
+  const [customers, setCustomers] = useState<Customer[]>([])
+  const [isLoadingCustomers, setIsLoadingCustomers] = useState(true)
   const [quotes, setQuotes] = useState<Quote[]>([])
   const [isLoadingQuotes, setIsLoadingQuotes] = useState(true)
   const [cart, setCart] = useState<Record<string, { quantity: number; note: string }>>(() => loadCart())
@@ -99,13 +114,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const load = async () => {
       try {
-        const [servicesData, categoriesData, quotesData] = await Promise.all([
+        const [servicesData, categoriesData, customersData, quotesData] = await Promise.all([
           fetchServices(),
           fetchCategories(),
+          fetchCustomers(),
           fetchQuotes(),
         ])
         setServices(servicesData)
         setCategories(categoriesData)
+        setCustomers(customersData)
         setQuotes(quotesData)
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Daten konnten nicht geladen werden'
@@ -114,6 +131,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       } finally {
         setIsLoading(false)
         setIsLoadingCategories(false)
+        setIsLoadingCustomers(false)
         setIsLoadingQuotes(false)
       }
     }
@@ -235,6 +253,61 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [handleError])
 
+  // ---- Customer operations ----
+  const addCustomer = useCallback(
+    async (c: Omit<Customer, 'id' | 'createdAt' | 'updatedAt'>) => {
+      try {
+        const created = await createCustomer(c)
+        setCustomers((prev) => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)))
+        toast.success('Kunde erstellt')
+        return created
+      } catch (error) {
+        handleError(error, 'Failed to add customer')
+        throw error
+      }
+    },
+    [handleError, toast],
+  )
+
+  const updateCustomer = useCallback(async (id: string, patch: Partial<Customer>) => {
+    try {
+      const updated = await updateCustomerApi(id, patch)
+      setCustomers((prev) =>
+        prev.map((c) => (c.id === id ? updated : c)).sort((a, b) => a.name.localeCompare(b.name)),
+      )
+      // Also update customer data in cached quotes
+      setQuotes((prev) =>
+        prev.map((q) => (q.customerId === id ? { ...q, customer: updated, customerName: updated.name } : q)),
+      )
+      toast.success('Kunde aktualisiert')
+    } catch (error) {
+      handleError(error, 'Failed to update customer')
+      throw error
+    }
+  }, [handleError, toast])
+
+  const deleteCustomer = useCallback(async (id: string) => {
+    try {
+      await deleteCustomerApi(id)
+      setCustomers((prev) => prev.filter((c) => c.id !== id))
+      toast.success('Kunde gelöscht')
+    } catch (error) {
+      handleError(error, 'Failed to delete customer')
+      throw error
+    }
+  }, [handleError, toast])
+
+  const refreshCustomers = useCallback(async () => {
+    try {
+      const data = await fetchCustomers()
+      setCustomers(data)
+    } catch (error) {
+      handleError(error, 'Failed to refresh customers')
+    }
+  }, [handleError])
+
+  const clearCart = useCallback(() => setCart({}), [])
+
   // ---- Quote operations ----
   const addQuote = useCallback(
     async (q: Omit<Quote, 'id' | 'createdAt' | 'updatedAt'>) => {
@@ -338,6 +411,41 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [handleError])
 
+  const createQuoteFromCart = useCallback(
+    async (title: string, customerId?: string) => {
+      try {
+        const created = await createQuoteApi({
+          title,
+          customerId,
+          status: 'draft',
+          discountValue: 0,
+        })
+        const entries = Object.entries(cart)
+        let sortOrder = 0
+        for (const [serviceId, entry] of entries) {
+          const service = services.find((s) => s.id === serviceId)
+          if (!service || entry.quantity <= 0) continue
+          await addQuoteItemApi(created.id, {
+            serviceId: service.id,
+            unitPrice: service.salePrice,
+            quantity: entry.quantity,
+            customNote: entry.note || undefined,
+            sortOrder: sortOrder++,
+          })
+        }
+        clearCart()
+        const detail = await fetchQuoteApi(created.id)
+        setQuotes((prev) => [detail, ...prev])
+        toast.success('Angebot aus Warenkorb erstellt')
+        return detail
+      } catch (error) {
+        handleError(error, 'Failed to create quote from cart')
+        throw error
+      }
+    },
+    [cart, services, createQuoteApi, addQuoteItemApi, fetchQuoteApi, clearCart, handleError, toast],
+  )
+
   // ---- Cart operations ----
   const setQuantity = useCallback((serviceId: string, quantity: number) => {
     setCart((prev) => {
@@ -358,8 +466,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return next
     })
   }, [])
-
-  const clearCart = useCallback(() => setCart({}), [])
 
   // ---- Settings ----
   const updateSettings = useCallback((patch: Partial<Settings>) => {
@@ -394,6 +500,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       updateCategory,
       deleteCategory,
       refreshCategories,
+      customers,
+      isLoadingCustomers,
+      addCustomer,
+      updateCustomer,
+      deleteCustomer,
+      refreshCustomers,
       quotes,
       isLoadingQuotes,
       addQuote,
@@ -405,6 +517,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addItem,
       updateItem,
       deleteItem,
+      createQuoteFromCart,
     }),
     [
       services,
@@ -427,6 +540,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       updateCategory,
       deleteCategory,
       refreshCategories,
+      customers,
+      isLoadingCustomers,
+      addCustomer,
+      updateCustomer,
+      deleteCustomer,
+      refreshCustomers,
       quotes,
       isLoadingQuotes,
       addQuote,
@@ -438,6 +557,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addItem,
       updateItem,
       deleteItem,
+      createQuoteFromCart,
     ],
   )
 
