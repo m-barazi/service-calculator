@@ -1437,6 +1437,13 @@ async function ensureTables() {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
+
+  // Migration: add quote_number to existing quotes tables that predate it
+  await pool.query(`
+    ALTER TABLE quotes
+    ADD COLUMN IF NOT EXISTS quote_number VARCHAR(20) UNIQUE
+  `);
+
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_quotes_status ON quotes(status)`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_quotes_created ON quotes(created_at DESC)`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_quotes_quote_number ON quotes(quote_number)`);
