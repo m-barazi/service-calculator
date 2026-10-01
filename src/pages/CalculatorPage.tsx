@@ -8,6 +8,7 @@ import { computeCart } from '../lib/calc'
 import { ServiceRow } from '../components/ServiceRow'
 import { SummaryPanel } from '../components/SummaryPanel'
 import { DetailsModal } from '../components/DetailsModal'
+import { ProductDetailsModal } from '../components/ProductDetailsModal'
 import { CreateQuoteFromCartModal } from '../components/CreateQuoteFromCartModal'
 import { KeyboardShortcutsModal } from '../components/KeyboardShortcutsModal'
 import { formatEUR } from '../lib/format'
@@ -31,6 +32,7 @@ export function CalculatorPage() {
   const [activeCategory, setActiveCategory] = useState<string | null>(null)
   const [showPrices, setShowPrices] = useState(true)
   const [detailsOpen, setDetailsOpen] = useState(false)
+  const [productDetailsId, setProductDetailsId] = useState<string | null>(null)
   const [createQuoteOpen, setCreateQuoteOpen] = useState(false)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
   const [cartDiscountType, setCartDiscountType] = useState<CartDiscountType | undefined>(undefined)
@@ -86,6 +88,15 @@ export function CalculatorPage() {
       )
     })
   }, [visibleServices, activeCategory, search])
+
+  const selectedService = useMemo(
+    () => (productDetailsId ? services.find((s) => s.id === productDetailsId) : undefined),
+    [productDetailsId, services],
+  )
+  const selectedCategory = useMemo(
+    () => (selectedService ? allCategories.find((c) => c.id === selectedService.categoryId) : undefined),
+    [selectedService, allCategories],
+  )
 
   // Totals
   const cartItems = useMemo(
@@ -312,6 +323,7 @@ export function CalculatorPage() {
                           categoryIcon={cat.icon}
                           note={cart[s.id]?.note ?? ''}
                           onChangeNote={(note) => setNote(s.id, note)}
+                          onSelect={() => setProductDetailsId(s.id)}
                         />
                       ))}
                     </div>
@@ -384,6 +396,22 @@ export function CalculatorPage() {
           setCreateQuoteOpen(true)
         }}
       />
+
+      {selectedService && (
+        <ProductDetailsModal
+          open={!!selectedService}
+          onClose={() => setProductDetailsId(null)}
+          service={selectedService}
+          categoryName={selectedCategory?.name}
+          categoryColor={selectedCategory?.color}
+          categoryIcon={selectedCategory?.icon}
+          quantity={cart[selectedService.id]?.quantity ?? 0}
+          note={cart[selectedService.id]?.note ?? ''}
+          vatRate={settings.vatRate}
+          onChangeQuantity={(q) => setQuantity(selectedService.id, q)}
+          onChangeNote={(note) => setNote(selectedService.id, note)}
+        />
+      )}
 
       <CreateQuoteFromCartModal
         open={createQuoteOpen}

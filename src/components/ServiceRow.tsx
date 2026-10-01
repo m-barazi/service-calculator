@@ -14,6 +14,7 @@ interface ServiceRowProps {
   categoryIcon?: string
   note?: string
   onChangeNote?: (note: string) => void
+  onSelect?: () => void
 }
 
 export function ServiceRow({
@@ -26,6 +27,7 @@ export function ServiceRow({
   categoryIcon,
   note,
   onChangeNote,
+  onSelect,
 }: ServiceRowProps) {
   const [showNote, setShowNote] = useState(false)
   const isActive = quantity > 0
@@ -33,12 +35,16 @@ export function ServiceRow({
 
   return (
     <div
+      onClick={() => onSelect?.()}
       className={[
         'group relative flex flex-col gap-3 rounded-2xl border bg-surface px-4 py-4 transition-all sm:flex-row sm:items-center sm:gap-4 sm:px-5',
+        onSelect ? 'cursor-pointer' : '',
         isActive
           ? 'border-accent/40 shadow-[0_1px_0_0_rgb(0_0_0_/_0.02),0_8px_24px_-12px_rgb(var(--accent)_/_0.35)]'
           : 'border-border hover:border-border-strong hover:shadow-soft',
       ].join(' ')}
+      role={onSelect ? 'button' : undefined}
+      aria-label={onSelect ? `${service.name} Details anzeigen` : undefined}
     >
       {/* Active indicator dot */}
       {isActive && (
@@ -101,7 +107,10 @@ export function ServiceRow({
       )}
 
       {/* Stepper + total */}
-      <div className="flex items-center justify-between gap-3 sm:justify-end">
+      <div
+        className="flex items-center justify-between gap-3 sm:justify-end"
+        onClick={(e) => e.stopPropagation()}
+      >
         <QuantityStepper value={quantity} onChange={onChangeQuantity} />
         <div className="flex flex-col items-end min-w-[100px]">
           <span className="text-2xs uppercase tracking-wider text-ink-muted">
@@ -120,7 +129,10 @@ export function ServiceRow({
 
       {/* Note toggle + inline field */}
       {(showNote || note) ? (
-        <div className="flex items-center gap-2">
+        <div
+          className="flex items-center gap-2"
+          onClick={(e) => e.stopPropagation()}
+        >
           <button
             onClick={() => setShowNote(!showNote)}
             className={[
@@ -142,7 +154,10 @@ export function ServiceRow({
         </div>
       ) : (
         <button
-          onClick={() => setShowNote(true)}
+          onClick={(e) => {
+            e.stopPropagation()
+            setShowNote(true)
+          }}
           className="qty-btn text-ink-muted"
           title="Notiz hinzufügen"
         >
