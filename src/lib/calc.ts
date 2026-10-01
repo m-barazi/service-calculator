@@ -1,14 +1,18 @@
-import type { CartDiscountType, CartItem, CartTotals, CategorySubtotal, LineComputation, Service } from '../types'
+import type { CartDiscountType, CartItem, CartItemWithPrice, CartTotals, CategorySubtotal, LineComputation, Service } from '../types'
 
 export function computeLine(
   service: Service,
   quantity: number,
   vatRate: number,
+  unitPrice?: number,
+  purchasePrice?: number,
 ): Omit<LineComputation, 'note'> {
   const safeQty = Math.max(0, quantity)
-  const totalCostNet = service.purchasePrice * safeQty
+  const effectivePurchasePrice = purchasePrice ?? service.purchasePrice
+  const effectiveSalePrice = unitPrice ?? service.salePrice
+  const totalCostNet = effectivePurchasePrice * safeQty
   const totalCostGross = totalCostNet * (1 + vatRate)
-  const totalSaleNet = service.salePrice * safeQty
+  const totalSaleNet = effectiveSalePrice * safeQty
   const totalSaleGross = totalSaleNet * (1 + vatRate)
   const profitNet = totalSaleNet - totalCostNet
   const profitMarginPct = totalSaleNet > 0 ? profitNet / totalSaleNet : 0
@@ -39,8 +43,9 @@ export function computeCart(
     if (item.quantity <= 0) continue
     const svc = serviceMap.get(item.serviceId)
     if (!svc) continue
+    const withPrice = item as CartItemWithPrice
     lines.push({
-      ...computeLine(svc, item.quantity, vatRate),
+      ...computeLine(svc, item.quantity, vatRate, withPrice.unitPrice, withPrice.purchasePrice),
       note: item.note,
     })
   }

@@ -153,13 +153,22 @@ export function QuoteDetail({
   )
 
   const handleItemBlur = useCallback(
-    async (itemId: string, field: 'quantity' | 'unitPrice', rawValue: string) => {
+    async (itemId: string, field: 'quantity' | 'unitPrice' | 'purchasePrice', rawValue: string) => {
       const parsed = field === 'quantity' ? Math.max(1, Math.floor(Number(rawValue) || 1)) : parseGermanNumber(rawValue)
       const item = q.items.find((i) => i.id === itemId)
       if (!item) return
-      const currentVal = field === 'quantity' ? item.quantity : item.unitPrice
+      const currentVal = field === 'quantity' ? item.quantity : field === 'unitPrice' ? item.unitPrice : (item.purchasePrice ?? item.service?.purchasePrice ?? 0)
       if (parsed === currentVal) return
-      await updateItem(q.id, itemId, { [field]: parsed })
+      if (field === 'purchasePrice') {
+        const servicePrice = item.service?.purchasePrice ?? 0
+        if (parsed === servicePrice) {
+          await updateItem(q.id, itemId, { purchasePrice: undefined })
+        } else {
+          await updateItem(q.id, itemId, { [field]: parsed })
+        }
+      } else {
+        await updateItem(q.id, itemId, { [field]: parsed })
+      }
       await refreshSelected()
     },
     [q, updateItem, refreshSelected],
@@ -270,6 +279,7 @@ export function QuoteDetail({
                   onDelete={() => handleDeleteItem(item.id)}
                   onBlurQuantity={(val) => handleItemBlur(item.id, 'quantity', val)}
                   onBlurPrice={(val) => handleItemBlur(item.id, 'unitPrice', val)}
+                  onBlurPurchasePrice={item.service ? (val) => handleItemBlur(item.id, 'purchasePrice', val) : undefined}
                 />
               ))}
             </div>

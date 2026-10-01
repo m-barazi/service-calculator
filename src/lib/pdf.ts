@@ -118,7 +118,7 @@ export function generatePdfReport(
     rows.push([
       nameCell,
       String(l.quantity),
-      formatEUR(l.service.salePrice),
+      formatEUR(l.totalSaleNet / Math.max(1, l.quantity)),
       formatEUR(l.totalSaleNet),
       formatEUR(l.totalSaleGross),
     ])

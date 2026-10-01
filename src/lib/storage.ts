@@ -1,4 +1,4 @@
-import type { CartItem, Category, Service, Settings } from '../types'
+import type { CartEntry, CartItem, Category, Service, Settings } from '../types'
 
 const KEYS = {
   settings: 'sc.settings.v1',
@@ -35,22 +35,22 @@ export function saveSettings(settings: Settings): void {
 
 // ===== Cart =====
 
-export function loadCart(): Record<string, { quantity: number; note: string }> {
+export function loadCart(): Record<string, CartEntry> {
   try {
     const raw = localStorage.getItem(KEYS.cart)
     if (!raw) return {}
     const parsed = JSON.parse(raw)
-    // Migrate from old format (quantity-only) to new format
-    const result: Record<string, { quantity: number; note: string }> = {}
+    // Migrate from old format (quantity-only) to newer format with optional unitPrice
+    const result: Record<string, CartEntry> = {}
     for (const [key, value] of Object.entries(parsed)) {
       if (typeof value === 'number') {
         // Old format: { serviceId: quantity }
         result[key] = { quantity: value, note: '' }
       } else if (typeof value === 'object' && value !== null) {
-        // New format: { serviceId: { quantity, note } }
         result[key] = {
           quantity: (value as any).quantity ?? 0,
           note: (value as any).note ?? '',
+          unitPrice: typeof (value as any).unitPrice === 'number' ? (value as any).unitPrice : undefined,
         }
       }
     }
@@ -60,7 +60,7 @@ export function loadCart(): Record<string, { quantity: number; note: string }> {
   }
 }
 
-export function saveCart(cart: Record<string, { quantity: number; note: string }>): void {
+export function saveCart(cart: Record<string, CartEntry>): void {
   try {
     localStorage.setItem(KEYS.cart, JSON.stringify(cart))
   } catch {

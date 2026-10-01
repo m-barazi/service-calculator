@@ -19,6 +19,8 @@ export function CalculatorPage() {
     cart,
     setQuantity,
     setNote,
+    setUnitPrice,
+    resetCartPrice,
     clearCart,
     undoClearCart,
     canUndoClearCart,
@@ -316,7 +318,12 @@ export function CalculatorPage() {
                           key={s.id}
                           service={s}
                           quantity={cart[s.id]?.quantity ?? 0}
+                          unitPrice={cart[s.id]?.unitPrice}
                           onChangeQuantity={(q) => setQuantity(s.id, q)}
+                          onChangeUnitPrice={(price) => {
+                            if (price === undefined || price === s.salePrice) resetCartPrice(s.id)
+                            else setUnitPrice(s.id, price)
+                          }}
                           showPrices={showPrices}
                           categoryName={cat.name}
                           categoryColor={cat.color}
@@ -407,9 +414,14 @@ export function CalculatorPage() {
           categoryIcon={selectedCategory?.icon}
           quantity={cart[selectedService.id]?.quantity ?? 0}
           note={cart[selectedService.id]?.note ?? ''}
+          unitPrice={cart[selectedService.id]?.unitPrice}
           vatRate={settings.vatRate}
           onChangeQuantity={(q) => setQuantity(selectedService.id, q)}
           onChangeNote={(note) => setNote(selectedService.id, note)}
+          onChangeUnitPrice={(price) => {
+            if (price === undefined || price === selectedService.salePrice) resetCartPrice(selectedService.id)
+            else setUnitPrice(selectedService.id, price)
+          }}
         />
       )}
 

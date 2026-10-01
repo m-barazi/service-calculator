@@ -358,6 +358,9 @@ function toCamelQuoteItem(row: any): QuoteItem {
     customNote: row.custom_note ?? row.customNote,
     quantity: row.quantity,
     unitPrice: parseFloat(row.unit_price ?? row.unitPrice ?? 0),
+    purchasePrice: row.purchase_price != null || row.purchasePrice != null
+      ? parseFloat(row.purchase_price ?? row.purchasePrice)
+      : undefined,
     sortOrder: row.sort_order ?? row.sortOrder ?? 0,
     createdAt: row.created_at ?? row.createdAt,
     updatedAt: row.updated_at ?? row.updatedAt,

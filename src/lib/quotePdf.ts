@@ -258,7 +258,7 @@ export function generateQuotePdf(
     let totalCostNet = 0
     let totalCostGross = 0
     for (const l of totals.lines) {
-      const purchasePrice = l.service ? l.service.purchasePrice : 0
+      const purchasePrice = l.item.purchasePrice ?? (l.service ? l.service.purchasePrice : 0)
       totalCostNet += purchasePrice * l.item.quantity
       totalCostGross += purchasePrice * (1 + vatRate) * l.item.quantity
     }
@@ -345,6 +345,7 @@ function buildCustomerTable(
     ])
   }
 
+
   // Discount row
   if (totals.discountAmount > 0) {
     rows.push([
@@ -415,7 +416,7 @@ function buildInternalTable(
         ? { content: `${name}\n${l.item.customNote}`, styles: { fontStyle: 'normal' } }
         : name
 
-    const purchasePrice = l.service ? l.service.purchasePrice : 0
+    const purchasePrice = l.item.purchasePrice ?? (l.service ? l.service.purchasePrice : 0)
     const vkNettoPerUnit = l.item.unitPrice
     const vkBruttoPerUnit = l.item.unitPrice * (1 + vatRate)
     const marginPct = vkNettoPerUnit > 0 ? (vkNettoPerUnit - purchasePrice) / vkNettoPerUnit : 0

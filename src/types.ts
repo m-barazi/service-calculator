@@ -40,6 +40,18 @@ export interface CartItem {
   note: string
 }
 
+export interface CartItemWithPrice extends CartItem {
+  unitPrice?: number
+  purchasePrice?: number
+}
+
+export interface CartEntry {
+  quantity: number
+  note: string
+  unitPrice?: number
+  purchasePrice?: number
+}
+
 export interface Settings {
   /** VAT rate as decimal, e.g. 0.19 for 19% */
   vatRate: number
@@ -169,6 +181,7 @@ export interface QuoteItem {
   customNote?: string
   quantity: number
   unitPrice: number
+  purchasePrice?: number
   sortOrder: number
   createdAt: string
   updatedAt: string

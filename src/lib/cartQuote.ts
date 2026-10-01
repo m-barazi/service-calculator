@@ -1,9 +1,4 @@
-import type { Service, CartItem } from '../types'
-
-export interface CartEntry {
-  quantity: number
-  note: string
-}
+import type { Service, CartItem, CartEntry } from '../types'
 
 export type CartMap = Record<string, CartEntry>
 
@@ -28,7 +23,7 @@ export function buildCartQuoteItems(
     if (!service || entry.quantity <= 0) continue
     items.push({
       serviceId: service.id,
-      unitPrice: service.salePrice,
+      unitPrice: entry.unitPrice ?? service.salePrice,
       quantity: entry.quantity,
       customNote: entry.note || undefined,
       sortOrder: sortOrder++,

@@ -8,7 +8,7 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import type { Service, Settings, Category, Customer, Quote, QuoteWithItems, QuoteItem, QuoteStatusHistoryEntry, DashboardData, CartTemplate, CartItem, Project, Invoice, InvoiceWithItems, InvoiceStatus } from '../types'
+import type { Service, Settings, Category, Customer, Quote, QuoteWithItems, QuoteItem, QuoteStatusHistoryEntry, DashboardData, CartTemplate, CartItem, Project, Invoice, InvoiceWithItems, InvoiceStatus, CartEntry } from '../types'
 import {
   loadCart,
   loadSettings,
@@ -69,10 +69,12 @@ interface AppState {
   deleteService: (id: string) => Promise<void>
   refreshServices: () => Promise<void>
 
-  // Cart (serviceId → { quantity, note })
-  cart: Record<string, { quantity: number; note: string }>
+  // Cart (serviceId → { quantity, note, unitPrice? })
+  cart: Record<string, CartEntry>
   setQuantity: (serviceId: string, quantity: number) => void
   setNote: (serviceId: string, note: string) => void
+  setUnitPrice: (serviceId: string, unitPrice: number | undefined) => void
+  resetCartPrice: (serviceId: string) => void
   clearCart: () => void
   undoClearCart: () => void
   canUndoClearCart: boolean
@@ -164,7 +166,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [isLoadingInvoices, setIsLoadingInvoices] = useState(true)
   const [dashboard, setDashboard] = useState<DashboardData | null>(null)
   const [isLoadingDashboard, setIsLoadingDashboard] = useState(true)
-  const [cart, setCart] = useState<Record<string, { quantity: number; note: string }>>(() => loadCart())
+  const [cart, setCart] = useState<Record<string, CartEntry>>(() => loadCart())
   const [cartBeforeClear, setCartBeforeClear] = useState<Record<string, { quantity: number; note: string }> | null>(null)
   const clearUndoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [cartTemplates, setCartTemplates] = useState<CartTemplate[]>(() => loadTemplates())
@@ -743,6 +745,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
     })
   }, [])
 
+  const setUnitPrice = useCallback((serviceId: string, unitPrice: number | undefined) => {
+    setCart((prev) => {
+      const next = { ...prev }
+      if (!next[serviceId]) return next
+      next[serviceId] = { ...next[serviceId], unitPrice }
+      return next
+    })
+  }, [])
+
+  const resetCartPrice = useCallback((serviceId: string) => {
+    setCart((prev) => {
+      const next = { ...prev }
+      if (!next[serviceId]) return next
+      const { unitPrice: _removed, ...rest } = next[serviceId]
+      next[serviceId] = rest
+      return next
+    })
+  }, [])
+
   const canUndoClearCart = useMemo(() => cartBeforeClear !== null, [cartBeforeClear])
 
   // ---- Settings ----
@@ -814,6 +835,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       cart,
       setQuantity,
       setNote,
+      setUnitPrice,
+      resetCartPrice,
       clearCart,
       undoClearCart,
       canUndoClearCart,
@@ -881,6 +904,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       refreshServices,
       setQuantity,
       setNote,
+      setUnitPrice,
+      resetCartPrice,
       clearCart,
       undoClearCart,
       canUndoClearCart,

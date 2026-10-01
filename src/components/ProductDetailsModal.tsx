@@ -1,9 +1,9 @@
-import { ExternalLink, Pin, X } from 'lucide-react'
-import { useMemo } from 'react'
+import { ExternalLink, Pin, RotateCcw, X } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
 import { Modal } from './Modal'
 import { QuantityStepper } from './QuantityStepper'
 import { computeLine } from '../lib/calc'
-import { formatEUR, formatPct } from '../lib/format'
+import { formatEUR, formatPct, formatPriceInput, parseGermanNumber } from '../lib/format'
 import type { Service } from '../types'
 
 interface ProductDetailsModalProps {
@@ -15,9 +15,11 @@ interface ProductDetailsModalProps {
   categoryIcon?: string
   quantity: number
   note: string
+  unitPrice?: number
   vatRate: number
   onChangeQuantity: (q: number) => void
   onChangeNote: (note: string) => void
+  onChangeUnitPrice?: (unitPrice: number | undefined) => void
 }
 
 export function ProductDetailsModal({
@@ -29,17 +31,37 @@ export function ProductDetailsModal({
   categoryIcon,
   quantity,
   note,
+  unitPrice,
   vatRate,
   onChangeQuantity,
   onChangeNote,
+  onChangeUnitPrice,
 }: ProductDetailsModalProps) {
+  const effectivePrice = unitPrice ?? service.salePrice
   const line = useMemo(
-    () => computeLine(service, quantity, vatRate),
-    [service, quantity, vatRate],
+    () => computeLine(service, quantity, vatRate, unitPrice),
+    [service, quantity, vatRate, unitPrice],
   )
 
-  const profitPerUnit = service.salePrice - service.purchasePrice
-  const marginPerUnit = service.salePrice > 0 ? profitPerUnit / service.salePrice : 0
+  const profitPerUnit = effectivePrice - service.purchasePrice
+  const marginPerUnit = effectivePrice > 0 ? profitPerUnit / effectivePrice : 0
+  const isPriceOverridden = unitPrice !== undefined && unitPrice !== service.salePrice
+  const [priceInput, setPriceInput] = useState(formatPriceInput(unitPrice ?? service.salePrice))
+
+  useEffect(() => {
+    setPriceInput(formatPriceInput(unitPrice ?? service.salePrice))
+  }, [unitPrice, service.salePrice])
+
+  const handlePriceBlur = () => {
+    const parsed = parseGermanNumber(priceInput)
+    if (!parsed || parsed === service.salePrice) {
+      onChangeUnitPrice?.(undefined)
+      setPriceInput(formatPriceInput(service.salePrice))
+      return
+    }
+    onChangeUnitPrice?.(parsed)
+    setPriceInput(formatPriceInput(parsed))
+  }
 
   return (
     <Modal
@@ -110,12 +132,43 @@ export function ProductDetailsModal({
 
         {/* Per-unit prices */}
         <section className="card overflow-hidden">
-          <div className="border-b border-border px-5 py-3">
+          <div className="flex items-center justify-between border-b border-border px-5 py-3">
             <p className="eyebrow">Preise pro Stück</p>
+            {isPriceOverridden && (
+              <button
+                onClick={() => {
+                  onChangeUnitPrice?.(undefined)
+                  setPriceInput(formatPriceInput(service.salePrice))
+                }}
+                className="inline-flex items-center gap-1 text-2xs font-medium text-ink-muted transition hover:text-ink"
+              >
+                <RotateCcw className="h-3 w-3" />
+                Auf Preisliste zurücksetzen
+              </button>
+            )}
           </div>
           <div className="grid grid-cols-2 gap-4 px-5 py-4 sm:grid-cols-4">
             <Value label="Einkauf (netto)" value={formatEUR(service.purchasePrice)} />
-            <Value label="Verkauf (netto)" value={formatEUR(service.salePrice)} />
+            {onChangeUnitPrice ? (
+              <label className="flex flex-col gap-1">
+                <span className="text-2xs font-medium uppercase tracking-wider text-ink-muted">
+                  Verkauf (netto)
+                </span>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={priceInput}
+                  onChange={(e) => setPriceInput(e.target.value)}
+                  onBlur={handlePriceBlur}
+                  className={[
+                    'input w-full text-sm num py-1',
+                    isPriceOverridden ? 'border-accent/50 text-accent-strong' : '',
+                  ].join(' ')}
+                />
+              </label>
+            ) : (
+              <Value label="Verkauf (netto)" value={formatEUR(effectivePrice)} />
+            )}
             <Value
               label="Gewinn / Stück"
               value={formatEUR(profitPerUnit)}

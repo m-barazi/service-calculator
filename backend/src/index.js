@@ -604,6 +604,7 @@ function toCamelQuoteItem(row) {
     customNote: row.custom_note,
     quantity: row.quantity,
     unitPrice: parseFloat(row.unit_price),
+    purchasePrice: row.purchase_price != null ? parseFloat(row.purchase_price) : undefined,
     sortOrder: row.sort_order,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -904,8 +905,8 @@ app.post('/api/quotes/:id/duplicate', async (req, res) => {
 
     for (const item of itemsResult.rows) {
       await pool.query(
-        `INSERT INTO quote_items (quote_id, service_id, custom_name, custom_note, quantity, unit_price, sort_order, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())`,
+        `INSERT INTO quote_items (quote_id, service_id, custom_name, custom_note, quantity, unit_price, purchase_price, sort_order, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())`,
         [
           newQuote.id,
           item.service_id,
@@ -913,6 +914,7 @@ app.post('/api/quotes/:id/duplicate', async (req, res) => {
           item.custom_note,
           item.quantity,
           item.unit_price,
+          item.purchase_price ?? null,
           item.sort_order,
         ]
       );
@@ -942,18 +944,26 @@ app.post('/api/quotes/:id/duplicate', async (req, res) => {
 app.post('/api/quotes/:id/items', async (req, res) => {
   try {
     const { id } = req.params;
-    const { serviceId, customName, customNote, quantity, unitPrice, sortOrder } = req.body;
+    const { serviceId, customName, customNote, quantity, unitPrice, purchasePrice, sortOrder } = req.body;
 
     const quoteCheck = await pool.query('SELECT id FROM quotes WHERE id = $1', [id]);
     if (quoteCheck.rows.length === 0) {
       return res.status(404).json({ error: 'Quote not found' });
     }
 
+    let effectivePurchasePrice = purchasePrice ?? null;
+    if (effectivePurchasePrice == null && serviceId) {
+      const serviceResult = await pool.query('SELECT purchase_price FROM services WHERE id = $1', [serviceId]);
+      if (serviceResult.rows.length > 0) {
+        effectivePurchasePrice = serviceResult.rows[0].purchase_price;
+      }
+    }
+
     const insertResult = await pool.query(
-      `INSERT INTO quote_items (quote_id, service_id, custom_name, custom_note, quantity, unit_price, sort_order, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
+      `INSERT INTO quote_items (quote_id, service_id, custom_name, custom_note, quantity, unit_price, purchase_price, sort_order, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
        RETURNING id`,
-      [id, serviceId || null, customName || null, customNote || null, quantity ?? 1, unitPrice ?? 0, sortOrder ?? 0]
+      [id, serviceId || null, customName || null, customNote || null, quantity ?? 1, unitPrice ?? 0, effectivePurchasePrice, sortOrder ?? 0]
     );
 
     const itemResult = await pool.query(
@@ -974,7 +984,7 @@ app.post('/api/quotes/:id/items', async (req, res) => {
 app.put('/api/quotes/:id/items/:itemId', async (req, res) => {
   try {
     const { id, itemId } = req.params;
-    const { serviceId, customName, customNote, quantity, unitPrice, sortOrder } = req.body;
+    const { serviceId, customName, customNote, quantity, unitPrice, purchasePrice, sortOrder } = req.body;
 
     const sets = [];
     const vals = [];
@@ -985,6 +995,7 @@ app.put('/api/quotes/:id/items/:itemId', async (req, res) => {
     if (customNote !== undefined) { sets.push(`custom_note = $${idx++}`); vals.push(customNote); }
     if (quantity !== undefined) { sets.push(`quantity = $${idx++}`); vals.push(quantity); }
     if (unitPrice !== undefined) { sets.push(`unit_price = $${idx++}`); vals.push(unitPrice); }
+    if (purchasePrice !== undefined) { sets.push(`purchase_price = $${idx++}`); vals.push(purchasePrice); }
     if (sortOrder !== undefined) { sets.push(`sort_order = $${idx++}`); vals.push(sortOrder); }
 
     sets.push(`updated_at = NOW()`);
@@ -1466,6 +1477,7 @@ async function ensureTables() {
       custom_name TEXT,
       custom_note TEXT,
       unit_price NUMERIC NOT NULL DEFAULT 0,
+      purchase_price NUMERIC,
       quantity NUMERIC NOT NULL DEFAULT 1,
       sort_order INTEGER NOT NULL DEFAULT 0,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -1473,6 +1485,12 @@ async function ensureTables() {
     )
   `);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_quote_items_quote ON quote_items(quote_id, sort_order)`);
+
+  // Migration: add purchase_price to existing quote_items tables
+  await pool.query(`
+    ALTER TABLE quote_items
+    ADD COLUMN IF NOT EXISTS purchase_price NUMERIC
+  `);
 
   // Migration: add customer_id to existing quotes tables
   await pool.query(`

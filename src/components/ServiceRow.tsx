@@ -1,13 +1,15 @@
 import { useState } from 'react'
-import { ExternalLink, FileText, Pin, StickyNote } from 'lucide-react'
+import { ExternalLink, FileText, Pin, RotateCcw, StickyNote } from 'lucide-react'
 import type { Service } from '../types'
-import { formatEUR } from '../lib/format'
+import { formatEUR, formatPriceInput, parseGermanNumber } from '../lib/format'
 import { QuantityStepper } from './QuantityStepper'
 
 interface ServiceRowProps {
   service: Service
   quantity: number
+  unitPrice?: number
   onChangeQuantity: (q: number) => void
+  onChangeUnitPrice?: (unitPrice: number | undefined) => void
   showPrices: boolean
   categoryName?: string
   categoryColor?: string
@@ -20,7 +22,9 @@ interface ServiceRowProps {
 export function ServiceRow({
   service,
   quantity,
+  unitPrice,
   onChangeQuantity,
+  onChangeUnitPrice,
   showPrices,
   categoryName,
   categoryColor,
@@ -30,8 +34,28 @@ export function ServiceRow({
   onSelect,
 }: ServiceRowProps) {
   const [showNote, setShowNote] = useState(false)
+  const [priceInput, setPriceInput] = useState(formatPriceInput(unitPrice ?? service.salePrice))
   const isActive = quantity > 0
-  const lineTotal = service.salePrice * quantity
+  const effectivePrice = unitPrice ?? service.salePrice
+  const lineTotal = effectivePrice * quantity
+  const isPriceOverridden = unitPrice !== undefined && unitPrice !== service.salePrice
+
+  const handlePriceBlur = () => {
+    const parsed = parseGermanNumber(priceInput)
+    if (!parsed || parsed === service.salePrice) {
+      onChangeUnitPrice?.(undefined)
+      setPriceInput(formatPriceInput(service.salePrice))
+      return
+    }
+    onChangeUnitPrice?.(parsed)
+    setPriceInput(formatPriceInput(parsed))
+  }
+
+  const resetPrice = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    onChangeUnitPrice?.(undefined)
+    setPriceInput(formatPriceInput(service.salePrice))
+  }
 
   return (
     <div
@@ -95,13 +119,53 @@ export function ServiceRow({
       </div>
 
       {/* Price */}
-      {showPrices && (
+      {showPrices && onChangeUnitPrice && (
+        <div
+          className="flex flex-col items-start sm:items-end sm:min-w-[120px]"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center gap-1.5">
+            <span className="text-2xs uppercase tracking-wider text-ink-muted">
+              Preis / Stk
+            </span>
+            {isPriceOverridden && (
+              <span
+                className="inline-flex h-2 w-2 rounded-full bg-accent"
+                title="Von Preisliste abweichender Preis"
+              />
+            )}
+          </div>
+          <div className="flex items-center gap-1">
+            <input
+              type="text"
+              inputMode="decimal"
+              value={priceInput}
+              onChange={(e) => setPriceInput(e.target.value)}
+              onBlur={handlePriceBlur}
+              className={[
+                'input w-24 text-right num text-sm py-1',
+                isPriceOverridden ? 'border-accent/50 text-accent-strong' : '',
+              ].join(' ')}
+            />
+            {isPriceOverridden && (
+              <button
+                onClick={resetPrice}
+                className="qty-btn text-ink-muted"
+                title="Auf Preislistenpreis zurücksetzen"
+              >
+                <RotateCcw className="h-3 w-3" />
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+      {showPrices && !onChangeUnitPrice && (
         <div className="flex flex-col items-start sm:items-end sm:min-w-[120px]">
           <span className="text-2xs uppercase tracking-wider text-ink-muted">
             Preis / Stk
           </span>
           <span className="num text-sm font-semibold text-ink">
-            {formatEUR(service.salePrice)}
+            {formatEUR(effectivePrice)}
           </span>
         </div>
       )}
