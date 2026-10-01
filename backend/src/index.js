@@ -691,15 +691,68 @@ app.patch('/api/quotes/:id/items/reorder', async (req, res) => {
 app.get('/api/dashboard', async (req, res) => {
   try {
     const vatRate = parseFloat(req.query.vatRate) || 0.19;
+    const vatFactor = 1 + vatRate;
 
-    const [quotesResult, itemsResult, recentResult] = await Promise.all([
-      pool.query('SELECT * FROM quotes'),
+    const acceptedNetSql = `
+      SELECT COALESCE(SUM(net_total), 0) AS total
+      FROM (
+        SELECT GREATEST(0,
+          COALESCE(SUM(qi.quantity * qi.unit_price), 0) -
+          CASE
+            WHEN q.discount_type = 'percent' THEN COALESCE(SUM(qi.quantity * qi.unit_price), 0) * q.discount_value / 100
+            WHEN q.discount_type = 'amount' THEN q.discount_value
+            ELSE 0
+          END
+        ) AS net_total
+        FROM quotes q
+        LEFT JOIN quote_items qi ON q.id = qi.quote_id
+        WHERE q.status = 'accepted'
+        GROUP BY q.id, q.discount_type, q.discount_value
+      ) t
+    `;
+
+    const accepted90GrossSql = `
+      SELECT COALESCE(SUM(net_total * $1), 0) AS total
+      FROM (
+        SELECT GREATEST(0,
+          COALESCE(SUM(qi.quantity * qi.unit_price), 0) -
+          CASE
+            WHEN q.discount_type = 'percent' THEN COALESCE(SUM(qi.quantity * qi.unit_price), 0) * q.discount_value / 100
+            WHEN q.discount_type = 'amount' THEN q.discount_value
+            ELSE 0
+          END
+        ) AS net_total
+        FROM quotes q
+        LEFT JOIN quote_items qi ON q.id = qi.quote_id
+        WHERE q.status = 'accepted' AND q.created_at >= NOW() - INTERVAL '90 days'
+        GROUP BY q.id, q.discount_type, q.discount_value
+      ) t
+    `;
+
+    const [countsResult, acceptedNetResult, accepted90Result, topServicesResult, recentResult] = await Promise.all([
       pool.query(`
-        SELECT qi.*, s.name as service_name, s.purchase_price as service_purchase_price,
-               s.sale_price as service_sale_price, s.category_id as service_category_id
+        SELECT
+          COUNT(*) AS total,
+          COUNT(*) FILTER (WHERE status = 'draft') AS draft,
+          COUNT(*) FILTER (WHERE status = 'sent') AS sent,
+          COUNT(*) FILTER (WHERE status = 'accepted') AS accepted,
+          COUNT(*) FILTER (WHERE status = 'rejected') AS rejected
+        FROM quotes
+      `),
+      pool.query(acceptedNetSql),
+      pool.query(accepted90GrossSql, [vatFactor]),
+      pool.query(`
+        SELECT
+          COALESCE(qi.service_id, 'custom:' || COALESCE(qi.custom_name, 'custom')) AS service_id,
+          COALESCE(s.name, qi.custom_name, 'Freitext') AS name,
+          SUM(qi.quantity)::int AS count,
+          COALESCE(SUM(qi.quantity * qi.unit_price * $1), 0) AS total_gross
         FROM quote_items qi
         LEFT JOIN services s ON qi.service_id = s.id
-      `),
+        GROUP BY service_id, name
+        ORDER BY count DESC
+        LIMIT 5
+      `, [vatFactor]),
       pool.query(`
         SELECT q.*, c.name as customer_name, c.email as customer_email, c.phone as customer_phone,
                c.street as customer_street, c.zip as customer_zip, c.city as customer_city,
@@ -712,11 +765,31 @@ app.get('/api/dashboard', async (req, res) => {
       `),
     ]);
 
-    const quotes = quotesResult.rows.map(toCamelQuote);
-    const allItems = itemsResult.rows.map(toCamelQuoteItem);
-    const recentQuotes = recentResult.rows.map(toCamelQuote);
+    const counts = countsResult.rows[0];
+    const quoteStatusCounts = {
+      draft: parseInt(counts.draft, 10) || 0,
+      sent: parseInt(counts.sent, 10) || 0,
+      accepted: parseInt(counts.accepted, 10) || 0,
+      rejected: parseInt(counts.rejected, 10) || 0,
+    };
 
-    const data = buildDashboardData(quotes, allItems, recentQuotes, vatRate);
+    const topServices = topServicesResult.rows.map((row) => ({
+      serviceId: row.service_id,
+      name: row.name,
+      count: row.count,
+      totalGross: parseFloat(row.total_gross),
+    }));
+
+    const aggregated = {
+      quoteCount: parseInt(counts.total, 10) || 0,
+      quoteStatusCounts,
+      acceptedTotalNet: parseFloat(acceptedNetResult.rows[0].total),
+      accepted90DayGross: parseFloat(accepted90Result.rows[0].total),
+      topServices,
+      recentQuotes: recentResult.rows.map(toCamelQuote),
+    };
+
+    const data = buildDashboardData(aggregated, vatRate);
 
     res.json(data);
   } catch (error) {
