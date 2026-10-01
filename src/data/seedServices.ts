@@ -26,6 +26,7 @@ function svc(
   url?: string,
   note?: string,
   visible = true,
+  pinned = false,
 ): Service {
   return {
     id,
@@ -37,6 +38,7 @@ function svc(
     url,
     note,
     visible,
+    pinned,
     createdAt: now,
     updatedAt: now,
   }

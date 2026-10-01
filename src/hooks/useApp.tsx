@@ -27,12 +27,14 @@ import {
   createQuote as createQuoteApi,
   updateQuote as updateQuoteApi,
   deleteQuote as deleteQuoteApi,
+  duplicateQuote as duplicateQuoteApi,
   fetchQuote as fetchQuoteApi,
   addQuoteItem as addQuoteItemApi,
   updateQuoteItem as updateQuoteItemApi,
   deleteQuoteItem as deleteQuoteItemApi,
 } from '../lib/api'
 import { useTheme } from './useTheme'
+import { useToast } from './useToast'
 
 interface AppState {
   // Services
@@ -69,6 +71,7 @@ interface AppState {
   addQuote: (q: Omit<Quote, 'id' | 'createdAt' | 'updatedAt'>) => Promise<Quote>
   updateQuote: (id: string, patch: Partial<Quote>) => Promise<void>
   deleteQuote: (id: string) => Promise<void>
+  duplicateQuote: (id: string) => Promise<Quote>
   refreshQuotes: () => Promise<void>
   fetchQuoteDetail: (id: string) => Promise<QuoteWithItems>
   addItem: (quoteId: string, item: Omit<import('../types').QuoteItem, 'id' | 'quoteId' | 'createdAt' | 'updatedAt'>) => Promise<import('../types').QuoteItem>
@@ -79,6 +82,7 @@ interface AppState {
 const AppContext = createContext<AppState | null>(null)
 
 export function AppProvider({ children }: { children: ReactNode }) {
+  const toast = useToast()
   const [services, setServices] = useState<Service[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [categories, setCategories] = useState<Category[]>([])
@@ -104,7 +108,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setCategories(categoriesData)
         setQuotes(quotesData)
       } catch (error) {
+        const message = error instanceof Error ? error.message : 'Daten konnten nicht geladen werden'
         console.error('Failed to load data:', error)
+        toast.error(message)
       } finally {
         setIsLoading(false)
         setIsLoadingCategories(false)
@@ -122,121 +128,215 @@ export function AppProvider({ children }: { children: ReactNode }) {
     saveSettings(settings)
   }, [settings])
 
+  const handleError = useCallback((error: unknown, fallback: string) => {
+    const message = error instanceof Error ? error.message : fallback
+    console.error(fallback, error)
+    toast.error(message)
+  }, [toast])
+
   // ---- Service operations ----
   const refreshServices = useCallback(async () => {
     try {
       const data = await fetchServices()
       setServices(data)
     } catch (error) {
-      console.error('Failed to refresh services:', error)
+      handleError(error, 'Failed to refresh services')
     }
-  }, [])
+  }, [handleError])
 
   const addService = useCallback(
     async (s: Omit<Service, 'id' | 'createdAt' | 'updatedAt'>) => {
-      const created = await createService(s)
-      setServices((prev) => [...prev, created])
+      try {
+        const created = await createService(s)
+        setServices((prev) => [...prev, created])
+        toast.success('Leistung erstellt')
+      } catch (error) {
+        handleError(error, 'Failed to add service')
+        throw error
+      }
     },
-    [],
+    [handleError, toast],
   )
 
   const updateService = useCallback(async (id: string, patch: Partial<Service>) => {
-    const updated = await updateServiceApi(id, patch)
-    setServices((prev) =>
-      prev.map((s) => (s.id === id ? updated : s)),
-    )
-  }, [])
+    try {
+      const updated = await updateServiceApi(id, patch)
+      setServices((prev) =>
+        prev.map((s) => (s.id === id ? updated : s)),
+      )
+      toast.success('Leistung aktualisiert')
+    } catch (error) {
+      handleError(error, 'Failed to update service')
+      throw error
+    }
+  }, [handleError, toast])
 
   const deleteService = useCallback(async (id: string) => {
-    await apiDeleteService(id)
-    setServices((prev) => prev.filter((s) => s.id !== id))
-    setCart((prev) => {
-      const next = { ...prev }
-      delete next[id]
-      return next
-    })
-  }, [])
+    try {
+      await apiDeleteService(id)
+      setServices((prev) => prev.filter((s) => s.id !== id))
+      setCart((prev) => {
+        const next = { ...prev }
+        delete next[id]
+        return next
+      })
+      toast.success('Leistung gelöscht')
+    } catch (error) {
+      handleError(error, 'Failed to delete service')
+      throw error
+    }
+  }, [handleError, toast])
 
   // ---- Category operations ----
   const addCategory = useCallback(
     async (c: Omit<Category, 'id' | 'createdAt' | 'updatedAt'>) => {
-      const created = await createCategory(c)
-      setCategories((prev) => [...prev, created].sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name)))
+      try {
+        const created = await createCategory(c)
+        setCategories((prev) => [...prev, created].sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name)))
+        toast.success('Kategorie erstellt')
+      } catch (error) {
+        handleError(error, 'Failed to add category')
+        throw error
+      }
     },
-    [],
+    [handleError, toast],
   )
 
   const updateCategory = useCallback(async (id: string, patch: Partial<Category>) => {
-    const updated = await updateCategoryApi(id, patch)
-    setCategories((prev) =>
-      prev.map((c) => (c.id === id ? updated : c)),
-    )
-  }, [])
+    try {
+      const updated = await updateCategoryApi(id, patch)
+      setCategories((prev) =>
+        prev.map((c) => (c.id === id ? updated : c)),
+      )
+      toast.success('Kategorie aktualisiert')
+    } catch (error) {
+      handleError(error, 'Failed to update category')
+      throw error
+    }
+  }, [handleError, toast])
 
   const deleteCategory = useCallback(async (id: string) => {
-    await deleteCategoryApi(id)
-    setCategories((prev) => prev.filter((c) => c.id !== id))
-  }, [])
+    try {
+      await deleteCategoryApi(id)
+      setCategories((prev) => prev.filter((c) => c.id !== id))
+      toast.success('Kategorie gelöscht')
+    } catch (error) {
+      handleError(error, 'Failed to delete category')
+      throw error
+    }
+  }, [handleError, toast])
 
   const refreshCategories = useCallback(async () => {
     try {
       const data = await fetchCategories()
       setCategories(data)
     } catch (error) {
-      console.error('Failed to refresh categories:', error)
+      handleError(error, 'Failed to refresh categories')
     }
-  }, [])
+  }, [handleError])
 
   // ---- Quote operations ----
   const addQuote = useCallback(
     async (q: Omit<Quote, 'id' | 'createdAt' | 'updatedAt'>) => {
-      const created = await createQuoteApi(q)
-      setQuotes((prev) => [created, ...prev])
-      return created
+      try {
+        const created = await createQuoteApi(q)
+        setQuotes((prev) => [created, ...prev])
+        toast.success('Angebot erstellt')
+        return created
+      } catch (error) {
+        handleError(error, 'Failed to add quote')
+        throw error
+      }
     },
-    [],
+    [handleError, toast],
   )
 
   const updateQuote = useCallback(async (id: string, patch: Partial<Quote>) => {
-    const updated = await updateQuoteApi(id, patch)
-    setQuotes((prev) => prev.map((q) => (q.id === id ? updated : q)))
-  }, [])
+    try {
+      const updated = await updateQuoteApi(id, patch)
+      setQuotes((prev) => prev.map((q) => (q.id === id ? updated : q)))
+    } catch (error) {
+      handleError(error, 'Failed to update quote')
+      throw error
+    }
+  }, [handleError])
 
   const deleteQuote = useCallback(async (id: string) => {
-    await deleteQuoteApi(id)
-    setQuotes((prev) => prev.filter((q) => q.id !== id))
-  }, [])
+    try {
+      await deleteQuoteApi(id)
+      setQuotes((prev) => prev.filter((q) => q.id !== id))
+      toast.success('Angebot gelöscht')
+    } catch (error) {
+      handleError(error, 'Failed to delete quote')
+      throw error
+    }
+  }, [handleError, toast])
+
+  const duplicateQuote = useCallback(
+    async (id: string) => {
+      try {
+        const copy = await duplicateQuoteApi(id)
+        setQuotes((prev) => [copy, ...prev])
+        toast.success('Angebot dupliziert')
+        return copy
+      } catch (error) {
+        handleError(error, 'Failed to duplicate quote')
+        throw error
+      }
+    },
+    [handleError, toast],
+  )
 
   const refreshQuotes = useCallback(async () => {
     try {
       const data = await fetchQuotes()
       setQuotes(data)
     } catch (error) {
-      console.error('Failed to refresh quotes:', error)
+      handleError(error, 'Failed to refresh quotes')
     }
-  }, [])
+  }, [handleError])
 
   const fetchQuoteDetail = useCallback(async (id: string) => {
-    return await fetchQuoteApi(id)
-  }, [])
+    try {
+      return await fetchQuoteApi(id)
+    } catch (error) {
+      handleError(error, 'Failed to fetch quote detail')
+      throw error
+    }
+  }, [handleError])
 
   const addItem = useCallback(
     async (quoteId: string, item: Omit<import('../types').QuoteItem, 'id' | 'quoteId' | 'createdAt' | 'updatedAt'>) => {
-      return await addQuoteItemApi(quoteId, item)
+      try {
+        return await addQuoteItemApi(quoteId, item)
+      } catch (error) {
+        handleError(error, 'Failed to add quote item')
+        throw error
+      }
     },
-    [],
+    [handleError],
   )
 
   const updateItem = useCallback(
     async (quoteId: string, itemId: string, patch: Partial<import('../types').QuoteItem>) => {
-      await updateQuoteItemApi(quoteId, itemId, patch)
+      try {
+        await updateQuoteItemApi(quoteId, itemId, patch)
+      } catch (error) {
+        handleError(error, 'Failed to update quote item')
+        throw error
+      }
     },
-    [],
+    [handleError],
   )
 
   const deleteItem = useCallback(async (quoteId: string, itemId: string) => {
-    await deleteQuoteItemApi(quoteId, itemId)
-  }, [])
+    try {
+      await deleteQuoteItemApi(quoteId, itemId)
+    } catch (error) {
+      handleError(error, 'Failed to delete quote item')
+      throw error
+    }
+  }, [handleError])
 
   // ---- Cart operations ----
   const setQuantity = useCallback((serviceId: string, quantity: number) => {
@@ -299,6 +399,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addQuote,
       updateQuote,
       deleteQuote,
+      duplicateQuote,
       refreshQuotes,
       fetchQuoteDetail,
       addItem,
@@ -331,6 +432,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addQuote,
       updateQuote,
       deleteQuote,
+      duplicateQuote,
       refreshQuotes,
       fetchQuoteDetail,
       addItem,

@@ -24,6 +24,7 @@ interface FormState {
   url: string
   note: string
   visible: boolean
+  pinned: boolean
 }
 
 const empty: FormState = {
@@ -39,6 +40,7 @@ const empty: FormState = {
   url: '',
   note: '',
   visible: true,
+  pinned: false,
 }
 
 /** Parse German-format price string to number. Returns null on invalid. */
@@ -86,6 +88,7 @@ export function ServiceFormModal({
         url: prefillSource.url ?? '',
         note: prefillSource.note ?? '',
         visible: prefillSource.visible,
+        pinned: prefillSource.pinned ?? false,
       })
     } else {
       setForm(empty)
@@ -160,6 +163,7 @@ export function ServiceFormModal({
       url: form.url.trim() || undefined,
       note: form.note.trim() || undefined,
       visible: form.visible,
+      pinned: form.pinned,
     }
 
     setIsSubmitting(true)
@@ -232,9 +236,18 @@ export function ServiceFormModal({
             className="input w-full"
           >
             <option value="">Kategorie wählen…</option>
-            {categories.filter(c => c.visible).map(c => (
-              <option key={c.id} value={c.id}>{c.icon ? `${c.icon} ` : ''}{c.name}</option>
-            ))}
+            {categories.map((c) => {
+              const isCurrent = prefillSource?.categoryId === c.id
+              const show = c.visible || isCurrent
+              if (!show) return null
+              return (
+                <option key={c.id} value={c.id}>
+                  {c.icon ? `${c.icon} ` : ''}
+                  {c.name}
+                  {!c.visible ? ' (versteckt)' : ''}
+                </option>
+              )
+            })}
           </select>
         </Field>
 
@@ -346,6 +359,23 @@ export function ServiceFormModal({
             </p>
             <p className="text-2xs text-ink-muted">
               Deaktivieren, um diese Leistung im Rechner auszublenden.
+            </p>
+          </div>
+        </label>
+
+        <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-border bg-surface p-3.5 hover:border-border-strong">
+          <input
+            type="checkbox"
+            checked={form.pinned}
+            onChange={(e) => setForm({ ...form, pinned: e.target.checked })}
+            className="h-4 w-4 accent-accent"
+          />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-ink">
+              Im Rechner anpinnen
+            </p>
+            <p className="text-2xs text-ink-muted">
+              Gepinnte Leistungen werden im Rechner immer zuerst angezeigt.
             </p>
           </div>
         </label>

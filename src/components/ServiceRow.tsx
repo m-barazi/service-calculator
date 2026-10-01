@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ExternalLink, FileText, StickyNote } from 'lucide-react'
+import { ExternalLink, FileText, Pin, StickyNote } from 'lucide-react'
 import type { Service } from '../types'
 import { formatEUR } from '../lib/format'
 import { QuantityStepper } from './QuantityStepper'
@@ -54,6 +54,11 @@ export function ServiceRow({
           <h3 className="text-[15px] font-semibold tracking-tight text-ink">
             {service.name}
           </h3>
+          {service.pinned && (
+            <span className="text-accent" title="Gepinnte Leistung">
+              <Pin className="h-3.5 w-3.5 fill-current" />
+            </span>
+          )}
           {service.url && (
             <a
               href={service.url}

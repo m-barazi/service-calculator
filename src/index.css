@@ -212,6 +212,10 @@
   }
 }
 
+.animate-slide-up {
+  animation: slideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
 /* Modal backdrop */
 .backdrop {
   @apply fixed inset-0 z-40;

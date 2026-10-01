@@ -1,0 +1,20 @@
+{
+  "name": "Service-Calculator",
+  "short_name": "Kostenrechner",
+  "description": "Dienstleistungs-Kostenrechner mit Preislisten, Angeboten und PDF-Export.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fafaf9",
+  "theme_color": "#0d9488",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "lang": "de",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

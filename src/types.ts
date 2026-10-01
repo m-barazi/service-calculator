@@ -16,6 +16,8 @@ export interface Service {
   note?: string
   /** Whether this service is visible by default in the calculator */
   visible: boolean
+  /** Pinned services appear first in the calculator */
+  pinned: boolean
   createdAt: number | string
   updatedAt: number | string
 }
@@ -87,6 +89,7 @@ export type DiscountType = 'percent' | 'amount'
 
 export interface Quote {
   id: string
+  quoteNumber?: string
   title: string
   customerName?: string
   status: QuoteStatus

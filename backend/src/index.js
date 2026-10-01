@@ -30,6 +30,7 @@ function toCamel(row) {
     url: row.url,
     note: row.note,
     visible: row.visible,
+    pinned: row.pinned ?? false,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -51,7 +52,7 @@ function toCamelCategory(row) {
 
 app.get('/api/services', async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM services ORDER BY category_id, name');
+    const result = await pool.query('SELECT * FROM services ORDER BY pinned DESC, category_id, name');
     res.json(result.rows.map(toCamel));
   } catch (error) {
     console.error('Error fetching services:', error);
@@ -75,12 +76,12 @@ app.get('/api/services/:id', async (req, res) => {
 
 app.post('/api/services', async (req, res) => {
   try {
-    const { name, categoryId, purchasePrice, salePrice, defaultQuantity, url, note, visible } = req.body;
+    const { name, categoryId, purchasePrice, salePrice, defaultQuantity, url, note, visible, pinned } = req.body;
     const result = await pool.query(
-      `INSERT INTO services (name, category_id, purchase_price, sale_price, default_quantity, url, note, visible, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
+      `INSERT INTO services (name, category_id, purchase_price, sale_price, default_quantity, url, note, visible, pinned, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())
        RETURNING *`,
-      [name, categoryId, purchasePrice, salePrice, defaultQuantity, url, note, visible ?? true]
+      [name, categoryId, purchasePrice, salePrice, defaultQuantity, url, note, visible ?? true, pinned ?? false]
     );
     res.status(201).json(toCamel(result.rows[0]));
   } catch (error) {
@@ -92,7 +93,7 @@ app.post('/api/services', async (req, res) => {
 app.put('/api/services/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, categoryId, purchasePrice, salePrice, defaultQuantity, url, note, visible } = req.body;
+    const { name, categoryId, purchasePrice, salePrice, defaultQuantity, url, note, visible, pinned } = req.body;
 
     const sets = [];
     const vals = [];
@@ -106,6 +107,7 @@ app.put('/api/services/:id', async (req, res) => {
     if (url !== undefined) { sets.push(`url = $${idx++}`); vals.push(url); }
     if (note !== undefined) { sets.push(`note = $${idx++}`); vals.push(note); }
     if (visible !== undefined) { sets.push(`visible = $${idx++}`); vals.push(visible); }
+    if (pinned !== undefined) { sets.push(`pinned = $${idx++}`); vals.push(pinned); }
 
     sets.push(`updated_at = NOW()`);
     vals.push(id);
@@ -240,6 +242,7 @@ app.delete('/api/categories/:id', async (req, res) => {
 function toCamelQuote(row) {
   return {
     id: row.id,
+    quoteNumber: row.quote_number,
     title: row.title,
     customerName: row.customer_name,
     status: row.status,
@@ -306,17 +309,36 @@ app.get('/api/quotes/:id', async (req, res) => {
   }
 });
 
+async function generateQuoteNumber() {
+  const year = new Date().getFullYear();
+  const prefix = `AN-${year}-`;
+  const result = await pool.query(
+    `SELECT quote_number FROM quotes WHERE quote_number LIKE $1 ORDER BY quote_number DESC LIMIT 1`,
+    [`${prefix}%`]
+  );
+  let next = 1;
+  if (result.rows.length > 0) {
+    const last = result.rows[0].quote_number;
+    const match = last.match(/-(\d+)$/);
+    if (match) {
+      next = parseInt(match[1], 10) + 1;
+    }
+  }
+  return `${prefix}${String(next).padStart(4, '0')}`;
+}
+
 app.post('/api/quotes', async (req, res) => {
   try {
     const { title, customerName, status, discountType, discountValue, notes, validUntil } = req.body;
     if (!title) {
       return res.status(400).json({ error: 'Title is required' });
     }
+    const quoteNumber = await generateQuoteNumber();
     const result = await pool.query(
-      `INSERT INTO quotes (title, customer_name, status, discount_type, discount_value, notes, valid_until, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
+      `INSERT INTO quotes (quote_number, title, customer_name, status, discount_type, discount_value, notes, valid_until, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
        RETURNING *`,
-      [title, customerName || null, status || 'draft', discountType || null, discountValue ?? 0, notes || null, validUntil || null]
+      [quoteNumber, title, customerName || null, status || 'draft', discountType || null, discountValue ?? 0, notes || null, validUntil || null]
     );
     res.status(201).json(toCamelQuote(result.rows[0]));
   } catch (error) {
@@ -370,6 +392,75 @@ app.delete('/api/quotes/:id', async (req, res) => {
   } catch (error) {
     console.error('Error deleting quote:', error);
     res.status(500).json({ error: 'Failed to delete quote' });
+  }
+});
+
+// Duplicate quote
+app.post('/api/quotes/:id/duplicate', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const quoteResult = await pool.query('SELECT * FROM quotes WHERE id = $1', [id]);
+    if (quoteResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Quote not found' });
+    }
+    const original = quoteResult.rows[0];
+
+    const quoteNumber = await generateQuoteNumber();
+    const newQuoteResult = await pool.query(
+      `INSERT INTO quotes (quote_number, title, customer_name, status, discount_type, discount_value, notes, valid_until, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
+       RETURNING *`,
+      [
+        quoteNumber,
+        `${original.title} (Kopie)`,
+        original.customer_name,
+        'draft',
+        original.discount_type,
+        original.discount_value,
+        original.notes,
+        original.valid_until,
+      ]
+    );
+    const newQuote = newQuoteResult.rows[0];
+
+    const itemsResult = await pool.query(
+      `SELECT * FROM quote_items WHERE quote_id = $1 ORDER BY sort_order, created_at`,
+      [id]
+    );
+
+    for (const item of itemsResult.rows) {
+      await pool.query(
+        `INSERT INTO quote_items (quote_id, service_id, custom_name, custom_note, quantity, unit_price, sort_order, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())`,
+        [
+          newQuote.id,
+          item.service_id,
+          item.custom_name,
+          item.custom_note,
+          item.quantity,
+          item.unit_price,
+          item.sort_order,
+        ]
+      );
+    }
+
+    const detailResult = await pool.query(
+      `SELECT qi.*, s.name as service_name, s.purchase_price as service_purchase_price,
+              s.sale_price as service_sale_price, s.category_id as service_category_id
+       FROM quote_items qi
+       LEFT JOIN services s ON qi.service_id = s.id
+       WHERE qi.quote_id = $1
+       ORDER BY qi.sort_order, qi.created_at`,
+      [newQuote.id]
+    );
+
+    const quote = toCamelQuote(newQuote);
+    quote.items = detailResult.rows.map(toCamelQuoteItem);
+    res.status(201).json(quote);
+  } catch (error) {
+    console.error('Error duplicating quote:', error);
+    res.status(500).json({ error: 'Failed to duplicate quote' });
   }
 });
 
@@ -535,9 +626,17 @@ app.get('/api/health', (req, res) => {
 // ── Startup: ensure tables exist ─────────────────────────────────────────
 
 async function ensureTables() {
+  // Ensure the services table has the pinned column (migration for existing databases)
+  await pool.query(`
+    ALTER TABLE services
+    ADD COLUMN IF NOT EXISTS pinned BOOLEAN NOT NULL DEFAULT false
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_services_pinned ON services(pinned DESC)`);
+
   await pool.query(`
     CREATE TABLE IF NOT EXISTS quotes (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      quote_number VARCHAR(20) UNIQUE,
       title TEXT NOT NULL DEFAULT 'Neues Angebot',
       customer_name TEXT,
       status TEXT NOT NULL DEFAULT 'draft',
@@ -551,6 +650,7 @@ async function ensureTables() {
   `);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_quotes_status ON quotes(status)`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_quotes_created ON quotes(created_at DESC)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_quotes_quote_number ON quotes(quote_number)`);
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS quote_items (

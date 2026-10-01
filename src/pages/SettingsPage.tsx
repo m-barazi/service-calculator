@@ -12,6 +12,7 @@ import {
   Upload,
 } from 'lucide-react'
 import { useApp } from '../hooks/useApp'
+import { useToast } from '../hooks/useToast'
 import { buildBackup, parseBackup, type BackupPayload } from '../lib/storage'
 import { importBackup } from '../lib/api'
 import { formatDate } from '../lib/format'
@@ -20,6 +21,7 @@ import { Logo } from '../components/Logo'
 
 export function SettingsPage() {
   const { settings, updateSettings, services, categories, refreshServices, refreshCategories } = useApp()
+  const toast = useToast()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [importStatus, setImportStatus] = useState<{
     kind: 'idle' | 'success' | 'error'
@@ -67,6 +69,7 @@ export function SettingsPage() {
     a.click()
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
+    toast.success('Backup heruntergeladen')
   }
 
   // ----- Import -----
@@ -91,17 +94,18 @@ export function SettingsPage() {
       // Refresh data from backend
       await Promise.all([refreshServices(), refreshCategories()])
 
+      const successMessage = `Backup importiert: ${result.createdCategories} Kategorien, ${result.createdServices} neue und ${result.updatedServices} aktualisierte Leistungen.`
+      toast.success(successMessage)
       setImportStatus({
         kind: 'success',
-        message: `Backup importiert: ${result.createdCategories} Kategorien, ${result.createdServices} neue und ${result.updatedServices} aktualisierte Leistungen.`,
+        message: successMessage,
       })
     } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Datei konnte nicht eingelesen werden.'
+      toast.error(errorMessage)
       setImportStatus({
         kind: 'error',
-        message:
-          err instanceof Error
-            ? err.message
-            : 'Datei konnte nicht eingelesen werden.',
+        message: errorMessage,
       })
     } finally {
       setIsImporting(false)

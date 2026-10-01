@@ -3,6 +3,8 @@ import {
   Copy,
   Eye,
   EyeOff,
+  Pin,
+  PinOff,
   Pencil,
   Plus,
   Search,
@@ -59,6 +61,15 @@ export function PriceListPage() {
     }
   }
 
+  const handleTogglePinned = async (id: string, pinned: boolean) => {
+    setIsUpdating(true)
+    try {
+      await updateService(id, { pinned: !pinned })
+    } finally {
+      setIsUpdating(false)
+    }
+  }
+
   const displayCategories = useMemo(() => {
     const map = new Map<string, number>()
     services.forEach((s) => map.set(s.categoryId ?? '', (map.get(s.categoryId ?? '') ?? 0) + 1))
@@ -84,14 +95,9 @@ export function PriceListPage() {
         const catB = allCategories.find(c => c.id === b.categoryId)
         const sortA = catA ? catA.sortOrder : 999
         const sortB = catB ? catB.sortOrder : 999
-        return sortA - sortB || a.name.localeCompare(b.name)
+        return sortA - sortB || Number(b.pinned) - Number(a.pinned) || a.name.localeCompare(b.name)
       })
   }, [services, activeCategory, search, allCategories])
-
-  const totalRevenue = useMemo(
-    () => services.reduce((s, x) => s + x.salePrice, 0),
-    [services],
-  )
 
   return (
     <div className="mx-auto max-w-7xl px-5 py-6 sm:px-8 sm:py-10">
@@ -203,6 +209,9 @@ export function PriceListPage() {
                   {!s.visible && (
                     <span className="badge-neutral shrink-0">Versteckt</span>
                   )}
+                  {s.pinned && (
+                    <span className="badge-accent shrink-0">Gepinnt</span>
+                  )}
                 </div>
                 <div className="flex items-center text-sm text-ink-soft truncate">
                   {categoryName}
@@ -235,6 +244,18 @@ export function PriceListPage() {
                       <Eye className="h-4 w-4" />
                     ) : (
                       <EyeOff className="h-4 w-4" />
+                    )}
+                  </button>
+                  <button
+                    onClick={() => handleTogglePinned(s.id, s.pinned)}
+                    className={['qty-btn', s.pinned ? 'text-accent' : ''].filter(Boolean).join(' ')}
+                    disabled={isUpdating}
+                    title={s.pinned ? 'Pin entfernen' : 'Anpinnen'}
+                  >
+                    {s.pinned ? (
+                      <Pin className="h-4 w-4 fill-current" />
+                    ) : (
+                      <PinOff className="h-4 w-4" />
                     )}
                   </button>
                   <button
@@ -287,9 +308,24 @@ export function PriceListPage() {
                     {!s.visible && (
                       <span className="badge-neutral">Versteckt</span>
                     )}
+                    {s.pinned && (
+                      <span className="badge-accent">Gepinnt</span>
+                    )}
                   </div>
                 </div>
                 <div className="flex shrink-0 gap-0.5">
+                  <button
+                    onClick={() => handleTogglePinned(s.id, s.pinned)}
+                    className={['qty-btn', s.pinned ? 'text-accent' : ''].filter(Boolean).join(' ')}
+                    disabled={isUpdating}
+                    aria-label={s.pinned ? 'Pin entfernen' : 'Anpinnen'}
+                  >
+                    {s.pinned ? (
+                      <Pin className="h-4 w-4 fill-current" />
+                    ) : (
+                      <PinOff className="h-4 w-4" />
+                    )}
+                  </button>
                   <button
                     onClick={() => setEditing(s)}
                     className="qty-btn"
@@ -401,8 +437,6 @@ export function PriceListPage() {
         disabled={isDeleting}
       />
 
-      {/* Suppress unused variable lint */}
-      <span className="hidden">{totalRevenue}</span>
     </div>
   )
 }

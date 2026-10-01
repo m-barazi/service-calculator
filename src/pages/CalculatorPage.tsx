@@ -177,9 +177,9 @@ export function CalculatorPage() {
           ) : (
             <div className="stagger flex flex-col gap-4">
               {displayCategories.map((cat) => {
-                const catServices = filtered.filter(
-                  (s) => s.categoryId === cat.id,
-                )
+                const catServices = filtered
+                  .filter((s) => s.categoryId === cat.id)
+                  .sort((a, b) => Number(b.pinned) - Number(a.pinned) || a.name.localeCompare(b.name))
                 if (catServices.length === 0) return null
                 return (
                   <div key={cat.id}>

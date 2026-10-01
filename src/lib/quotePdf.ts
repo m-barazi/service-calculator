@@ -105,7 +105,14 @@ export function generateQuotePdf(
   doc.text('ANGEBOT', metaRightX, markY + 6, { align: 'right' })
   doc.setFontSize(9.5)
   doc.setTextColor(INK[0], INK[1], INK[2])
-  doc.text(formatDate(new Date()), metaRightX, markY + 22, { align: 'right' })
+  if (quote.quoteNumber) {
+    doc.text(quote.quoteNumber, metaRightX, markY + 20, { align: 'right' })
+    doc.setFontSize(8.5)
+    doc.setTextColor(INK_MUTED[0], INK_MUTED[1], INK_MUTED[2])
+    doc.text(formatDate(new Date()), metaRightX, markY + 34, { align: 'right' })
+  } else {
+    doc.text(formatDate(new Date()), metaRightX, markY + 22, { align: 'right' })
+  }
 
   y = markY + markSize + 32
 

@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS services (
   url TEXT,
   note TEXT,
   visible BOOLEAN NOT NULL DEFAULT true,
+  pinned BOOLEAN NOT NULL DEFAULT false,
   created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
@@ -31,6 +32,7 @@ CREATE TABLE IF NOT EXISTS services (
 CREATE INDEX IF NOT EXISTS idx_services_category_id ON services(category_id);
 CREATE INDEX IF NOT EXISTS idx_services_visible ON services(visible);
 CREATE INDEX IF NOT EXISTS idx_services_name ON services(name);
+CREATE INDEX IF NOT EXISTS idx_services_pinned ON services(pinned DESC);
 
 -- Seed categories
 INSERT INTO categories (name, description, icon, color, sort_order) VALUES
@@ -79,6 +81,7 @@ UNION ALL
 -- Quotes table
 CREATE TABLE IF NOT EXISTS quotes (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  quote_number VARCHAR(20) UNIQUE,
   title VARCHAR(255) NOT NULL,
   customer_name VARCHAR(255),
   status VARCHAR(20) NOT NULL DEFAULT 'draft'
@@ -91,6 +94,8 @@ CREATE TABLE IF NOT EXISTS quotes (
   created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
+
+CREATE INDEX IF NOT EXISTS idx_quotes_quote_number ON quotes(quote_number);
 
 CREATE INDEX IF NOT EXISTS idx_quotes_status ON quotes(status);
 CREATE INDEX IF NOT EXISTS idx_quotes_created ON quotes(created_at DESC);

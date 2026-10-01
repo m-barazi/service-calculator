@@ -2,3 +2,7 @@ node_modules/
 dist/
 .env
 *.tar.gz
+*.tsbuildinfo
+vite.config.d.ts
+vite.config.js
+.DS_Store

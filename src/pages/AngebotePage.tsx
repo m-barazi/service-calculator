@@ -2,6 +2,7 @@ import { Fragment, useCallback, useMemo, useState } from 'react'
 import {
   ArrowLeft,
   ChevronDown,
+  Copy,
   Download,
   FileText,
   Pencil,
@@ -43,6 +44,7 @@ export function AngebotePage() {
     addQuote,
     updateQuote,
     deleteQuote,
+    duplicateQuote,
     refreshQuotes,
     fetchQuoteDetail,
     addItem,
@@ -56,11 +58,11 @@ export function AngebotePage() {
   const [selectedQuote, setSelectedQuote] = useState<QuoteWithItems | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<Quote | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [isDuplicating, setIsDuplicating] = useState(false)
   const [addItemModalOpen, setAddItemModalOpen] = useState(false)
   const [itemSearch, setItemSearch] = useState('')
   const [freeName, setFreeName] = useState('')
   const [freePrice, setFreePrice] = useState('')
-  const [saving, setSaving] = useState(false)
 
   // ── Computed totals for selected quote ──────────────────────────────────
   const totals: QuoteTotals | null = useMemo(() => {
@@ -169,6 +171,22 @@ export function AngebotePage() {
     [selectedQuote, updateItem, refreshSelected],
   )
 
+  // ── Duplicate quote ───────────────────────────────────────────────────
+  const handleDuplicateQuote = useCallback(
+    async (id: string) => {
+      setIsDuplicating(true)
+      try {
+        const copy = await duplicateQuote(id)
+        await refreshQuotes()
+        const detail = await fetchQuoteDetail(copy.id)
+        setSelectedQuote(detail)
+      } finally {
+        setIsDuplicating(false)
+      }
+    },
+    [duplicateQuote, refreshQuotes, fetchQuoteDetail],
+  )
+
   // ── Delete quote ────────────────────────────────────────────────────────
   const handleDeleteQuote = useCallback(async () => {
     if (!confirmDelete) return
@@ -194,17 +212,6 @@ export function AngebotePage() {
     },
     [selectedQuote, totals, settings],
   )
-
-  // ── Save button ─────────────────────────────────────────────────────────
-  const handleSave = useCallback(async () => {
-    if (!selectedQuote) return
-    setSaving(true)
-    try {
-      await refreshSelected()
-    } finally {
-      setSaving(false)
-    }
-  }, [selectedQuote, refreshSelected])
 
   // ── Filtered services for add-item modal ────────────────────────────────
   const filteredServices = useMemo(() => {
@@ -265,6 +272,19 @@ export function AngebotePage() {
           <ArrowLeft className="h-4 w-4" />
           Zurück zur Übersicht
         </button>
+
+        {/* Header with quote number */}
+        <div className="mb-6 flex flex-col gap-1">
+          {q.quoteNumber && (
+            <p className="eyebrow">{q.quoteNumber}</p>
+          )}
+          <h1 className="text-2xl font-bold tracking-tight text-ink sm:text-3xl">
+            {q.title}
+          </h1>
+          {q.customerName && (
+            <p className="text-sm text-ink-soft">{q.customerName}</p>
+          )}
+        </div>
 
         {/* Two-panel layout */}
         <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
@@ -462,16 +482,16 @@ export function AngebotePage() {
                     <input
                       type="text"
                       inputMode="decimal"
-                      value={q.discountValue === 0 ? '' : String(q.discountValue)}
+                      value={q.discountValue === 0 ? '' : formatPriceInput(q.discountValue)}
                       onChange={(e) => {
-                        const val = parseFloat(e.target.value) || 0
+                        const val = parseGermanNumber(e.target.value)
                         setSelectedQuote((prev) =>
                           prev ? { ...prev, discountValue: val } : prev,
                         )
                       }}
                       onBlur={(e) =>
                         handleQuoteChange({
-                          discountValue: parseFloat(e.target.value) || 0,
+                          discountValue: parseGermanNumber(e.target.value),
                         })
                       }
                       className="input"
@@ -538,9 +558,6 @@ export function AngebotePage() {
 
         {/* Footer actions */}
         <div className="mt-6 flex flex-wrap items-center gap-3 border-t border-border pt-6">
-          <button onClick={handleSave} className="btn-primary" disabled={saving}>
-            {saving ? 'Speichert...' : 'Änderungen speichern'}
-          </button>
           <button
             onClick={() => handlePdf('customer')}
             className="btn-secondary"
@@ -556,6 +573,14 @@ export function AngebotePage() {
           >
             <Download className="h-4 w-4" />
             PDF Intern
+          </button>
+          <button
+            onClick={() => handleDuplicateQuote(q.id)}
+            className="btn-secondary"
+            disabled={isDuplicating}
+          >
+            <Copy className="h-4 w-4" />
+            Duplizieren
           </button>
           <div className="flex-1" />
           <button
@@ -640,30 +665,62 @@ export function AngebotePage() {
           {quotes.map((quote) => {
             const statusInfo = STATUS_MAP[quote.status] ?? STATUS_MAP.draft
             return (
-              <button
+              <div
                 key={quote.id}
-                onClick={() => openQuote(quote.id)}
                 className="card group flex flex-col gap-3 p-5 text-left transition hover:border-ink-faint"
               >
-                <div className="flex items-start justify-between gap-3">
-                  <h3 className="font-semibold text-ink truncate">
-                    {quote.title}
-                  </h3>
-                  <span
-                    className={`shrink-0 rounded-full px-2.5 py-0.5 text-2xs font-medium ${statusInfo.cls}`}
-                  >
-                    {statusInfo.label}
-                  </span>
-                </div>
-                {quote.customerName && (
-                  <p className="text-sm text-ink-soft truncate">
-                    {quote.customerName}
+                <button
+                  onClick={() => openQuote(quote.id)}
+                  className="text-left"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      {quote.quoteNumber && (
+                        <p className="eyebrow mb-1">{quote.quoteNumber}</p>
+                      )}
+                      <h3 className="font-semibold text-ink truncate">
+                        {quote.title}
+                      </h3>
+                    </div>
+                    <span
+                      className={`shrink-0 rounded-full px-2.5 py-0.5 text-2xs font-medium ${statusInfo.cls}`}
+                    >
+                      {statusInfo.label}
+                    </span>
+                  </div>
+                  {quote.customerName && (
+                    <p className="mt-1 text-sm text-ink-soft truncate">
+                      {quote.customerName}
+                    </p>
+                  )}
+                  <p className="mt-2 text-2xs text-ink-muted">
+                    {formatDate(quote.createdAt)}
                   </p>
-                )}
-                <p className="text-2xs text-ink-muted">
-                  {formatDate(quote.createdAt)}
-                </p>
-              </button>
+                </button>
+                <div className="flex items-center justify-end gap-1 border-t border-border pt-3">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleDuplicateQuote(quote.id)
+                    }}
+                    disabled={isDuplicating}
+                    className="qty-btn"
+                    title="Duplizieren"
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setConfirmDelete(quote)
+                    }}
+                    className="qty-btn text-danger hover:bg-danger/10"
+                    title="Löschen"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
             )
           })}
         </div>
