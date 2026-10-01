@@ -949,13 +949,22 @@ app.post('/api/quotes/:id/items', async (req, res) => {
       return res.status(404).json({ error: 'Quote not found' });
     }
 
-    const result = await pool.query(
+    const insertResult = await pool.query(
       `INSERT INTO quote_items (quote_id, service_id, custom_name, custom_note, quantity, unit_price, sort_order, created_at, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
-       RETURNING *`,
+       RETURNING id`,
       [id, serviceId || null, customName || null, customNote || null, quantity ?? 1, unitPrice ?? 0, sortOrder ?? 0]
     );
-    res.status(201).json(toCamelQuoteItem(result.rows[0]));
+
+    const itemResult = await pool.query(
+      `SELECT qi.*, s.name as service_name, s.purchase_price as service_purchase_price,
+              s.sale_price as service_sale_price, s.category_id as service_category_id
+       FROM quote_items qi
+       LEFT JOIN services s ON qi.service_id = s.id
+       WHERE qi.id = $1`,
+      [insertResult.rows[0].id]
+    );
+    res.status(201).json(toCamelQuoteItem(itemResult.rows[0]));
   } catch (error) {
     console.error('Error creating quote item:', error);
     res.status(500).json({ error: 'Failed to create quote item' });

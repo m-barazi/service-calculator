@@ -117,7 +117,7 @@ export function QuoteDetail({
       await addItem(q.id, {
         serviceId: service.id,
         unitPrice: service.salePrice,
-        quantity: 1,
+        quantity: service.defaultQuantity,
         sortOrder: q.items.length,
       })
       await refreshSelected()
@@ -131,6 +131,7 @@ export function QuoteDetail({
     const name = freeName.trim()
     if (!name) return
     const price = parseGermanNumber(freePrice)
+    if (!price) return
     await addItem(q.id, {
       customName: name,
       unitPrice: price,

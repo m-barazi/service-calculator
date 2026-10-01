@@ -1,6 +1,6 @@
 import { Plus, Search, X } from 'lucide-react'
 import { Modal } from '../Modal'
-import { formatEUR } from '../../lib/format'
+import { formatEUR, parseGermanNumber } from '../../lib/format'
 import type { Category, Service } from '../../types'
 
 interface AddItemModalProps {
@@ -135,7 +135,7 @@ export function AddItemModal({
             </label>
             <button
               onClick={onAddFree}
-              disabled={!freeName.trim()}
+              disabled={!freeName.trim() || parseGermanNumber(freePrice) <= 0}
               className="btn-primary shrink-0 disabled:cursor-not-allowed disabled:opacity-40"
             >
               <Plus className="h-4 w-4" />
