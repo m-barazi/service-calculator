@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import { Eye, EyeOff, GripVertical, Search, X } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Eye, EyeOff, GripVertical, HelpCircle, Search, X } from 'lucide-react'
 import type { CartDiscountType, Category } from '../types'
 
 type DisplayCategory = Category & { count: number }
@@ -9,6 +9,7 @@ import { ServiceRow } from '../components/ServiceRow'
 import { SummaryPanel } from '../components/SummaryPanel'
 import { DetailsModal } from '../components/DetailsModal'
 import { CreateQuoteFromCartModal } from '../components/CreateQuoteFromCartModal'
+import { KeyboardShortcutsModal } from '../components/KeyboardShortcutsModal'
 import { formatEUR } from '../lib/format'
 
 export function CalculatorPage() {
@@ -31,8 +32,10 @@ export function CalculatorPage() {
   const [showPrices, setShowPrices] = useState(true)
   const [detailsOpen, setDetailsOpen] = useState(false)
   const [createQuoteOpen, setCreateQuoteOpen] = useState(false)
+  const [shortcutsOpen, setShortcutsOpen] = useState(false)
   const [cartDiscountType, setCartDiscountType] = useState<CartDiscountType | undefined>(undefined)
   const [cartDiscountValue, setCartDiscountValue] = useState(0)
+  const searchRef = useRef<HTMLInputElement>(null)
 
   // Reordering state for drag & drop category sections
   const [orderedCategories, setOrderedCategories] = useState<Category[] | null>(null)
@@ -99,6 +102,45 @@ export function CalculatorPage() {
     [cartItems, services, settings.vatRate, cartDiscountType, cartDiscountValue],
   )
 
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement
+      const isTyping =
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.isContentEditable
+
+      if (!isTyping && e.key === '?' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault()
+        setShortcutsOpen((open) => !open)
+        return
+      }
+
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        searchRef.current?.focus()
+        return
+      }
+
+      if (e.key === 'Escape') {
+        if (search) {
+          e.preventDefault()
+          setSearch('')
+          setActiveCategory(null)
+        }
+        return
+      }
+
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Backspace') {
+        e.preventDefault()
+        if (Object.keys(cart).length > 0) clearCart()
+        return
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [cart, clearCart, search])
+
   return (
     <div className="mx-auto max-w-7xl px-5 py-6 sm:px-8 sm:py-10">
       {/* ─── Page header ─────────────────────────────── */}
@@ -125,6 +167,7 @@ export function CalculatorPage() {
               <div className="relative flex-1">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted" />
                 <input
+                  ref={searchRef}
                   type="text"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
@@ -347,6 +390,22 @@ export function CalculatorPage() {
         onClose={() => setCreateQuoteOpen(false)}
         defaultTitle="Angebot"
       />
+
+      <KeyboardShortcutsModal
+        open={shortcutsOpen}
+        onClose={() => setShortcutsOpen(false)}
+      />
+
+      {/* Floating help button */}
+      <button
+        onClick={() => setShortcutsOpen(true)}
+        className="fixed bottom-6 right-6 z-30 hidden items-center gap-2 rounded-full bg-ink px-4 py-2.5 text-sm font-medium text-canvas shadow-elevated transition hover:bg-ink-soft sm:flex"
+        aria-label="Tastatur-Shortcuts"
+        title="Tastatur-Shortcuts (?)"
+      >
+        <HelpCircle className="h-4 w-4" />
+        Shortcuts
+      </button>
     </div>
   )
 }
