@@ -9,16 +9,39 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-const pool = new Pool({
-  host: process.env.DB_HOST || 'db',
-  port: process.env.DB_PORT || 5432,
-  database: process.env.DB_NAME || 'service_calculator',
-  user: process.env.DB_USER || 'postgres',
-  password: process.env.DB_PASSWORD || 'postgres',
-});
+const IS_VERCEL = Boolean(process.env.VERCEL);
+
+// DATABASE_URL (z. B. Supabase/Neon auf Vercel) hat Vorrang; sonst die
+// bisherigen DB_*-Variablen (Docker-Compose-Setup).
+const pool = new Pool(
+  process.env.DATABASE_URL
+    ? {
+        connectionString: process.env.DATABASE_URL,
+        ssl: process.env.DATABASE_SSL === 'false' ? false : { rejectUnauthorized: false },
+        max: IS_VERCEL ? 3 : 10,
+      }
+    : {
+        host: process.env.DB_HOST || 'db',
+        port: process.env.DB_PORT || 5432,
+        database: process.env.DB_NAME || 'service_calculator',
+        user: process.env.DB_USER || 'postgres',
+        password: process.env.DB_PASSWORD || 'postgres',
+      },
+);
 
 app.use(cors());
 app.use(express.json());
+
+// Tabellen einmalig pro Instanz sicherstellen, bevor die erste Anfrage bedient wird
+// (auf Vercel gibt es keinen Server-Start, auf den man warten könnte).
+let tablesReady;
+app.use((req, res, next) => {
+  tablesReady ??= ensureTables().catch((err) => {
+    tablesReady = undefined; // beim nächsten Request erneut versuchen
+    throw err;
+  });
+  tablesReady.then(() => next(), next);
+});
 
 function toCamel(row) {
   return {
@@ -1509,11 +1532,18 @@ async function ensureTables() {
   console.log('Database tables ensured');
 }
 
-ensureTables().then(() => {
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Backend server running on port ${PORT}`);
+// Lokal / Docker: klassischer Server. Auf Vercel übernimmt die Plattform das
+// Starten und nutzt den Default-Export unten.
+if (!IS_VERCEL) {
+  ensureTables().then(() => {
+    tablesReady = Promise.resolve();
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`Backend server running on port ${PORT}`);
+    });
+  }).catch((err) => {
+    console.error('Failed to ensure database tables:', err);
+    process.exit(1);
   });
-}).catch((err) => {
-  console.error('Failed to ensure database tables:', err);
-  process.exit(1);
-});
+}
+
+export default app;
