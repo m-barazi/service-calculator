@@ -16,6 +16,8 @@ export function CalculatorPage() {
     setQuantity,
     setNote,
     clearCart,
+    undoClearCart,
+    canUndoClearCart,
     settings,
     cartLineCount,
     categories: allCategories,
@@ -251,6 +253,8 @@ export function CalculatorPage() {
             discountValue={cartDiscountValue}
             onDiscountTypeChange={setCartDiscountType}
             onDiscountValueChange={setCartDiscountValue}
+            onUndo={undoClearCart}
+            canUndo={canUndoClearCart}
           />
         </div>
       </div>

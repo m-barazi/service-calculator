@@ -1,4 +1,4 @@
-import { FileText, FolderOpen, ReceiptText, Sparkles, Tag, Trash2 } from 'lucide-react'
+import { FileText, FolderOpen, ReceiptText, Sparkles, Tag, Trash2, Undo2 } from 'lucide-react'
 import { useState } from 'react'
 import type { CartDiscountType, CartTotals } from '../types'
 import { formatEUR, formatPct, formatPriceInput, parseGermanNumber } from '../lib/format'
@@ -13,6 +13,8 @@ interface SummaryPanelProps {
   discountValue: number
   onDiscountTypeChange: (type?: CartDiscountType) => void
   onDiscountValueChange: (value: number) => void
+  onUndo?: () => void
+  canUndo?: boolean
 }
 
 export function SummaryPanel({
@@ -24,6 +26,8 @@ export function SummaryPanel({
   discountValue,
   onDiscountTypeChange,
   onDiscountValueChange,
+  onUndo,
+  canUndo,
 }: SummaryPanelProps) {
   const [templatesOpen, setTemplatesOpen] = useState(false)
   const isEmpty = totals.lines.length === 0
@@ -183,6 +187,15 @@ export function SummaryPanel({
           <Trash2 className="h-3.5 w-3.5" />
           Auswahl zurücksetzen
         </button>
+        {canUndo && (
+          <button
+            onClick={onUndo}
+            className="btn-ghost w-full text-xs text-accent"
+          >
+            <Undo2 className="h-3.5 w-3.5" />
+            Rückgängig
+          </button>
+        )}
       </div>
 
       <CartTemplatesModal open={templatesOpen} onClose={() => setTemplatesOpen(false)} />

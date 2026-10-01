@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react'
@@ -59,6 +60,8 @@ interface AppState {
   setQuantity: (serviceId: string, quantity: number) => void
   setNote: (serviceId: string, note: string) => void
   clearCart: () => void
+  undoClearCart: () => void
+  canUndoClearCart: boolean
   cartItemCount: number
   cartLineCount: number
 
@@ -123,6 +126,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [dashboard, setDashboard] = useState<DashboardData | null>(null)
   const [isLoadingDashboard, setIsLoadingDashboard] = useState(true)
   const [cart, setCart] = useState<Record<string, { quantity: number; note: string }>>(() => loadCart())
+  const [cartBeforeClear, setCartBeforeClear] = useState<Record<string, { quantity: number; note: string }> | null>(null)
+  const clearUndoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [cartTemplates, setCartTemplates] = useState<CartTemplate[]>(() => loadTemplates())
   const [settings, setSettings] = useState<Settings>(() => loadSettings())
 
@@ -332,7 +337,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [handleError])
 
-  const clearCart = useCallback(() => setCart({}), [])
+  const clearCart = useCallback(() => {
+    setCart((prev) => {
+      if (Object.keys(prev).length > 0) {
+        setCartBeforeClear(prev)
+        if (clearUndoTimerRef.current) clearTimeout(clearUndoTimerRef.current)
+        clearUndoTimerRef.current = setTimeout(() => {
+          setCartBeforeClear(null)
+        }, 5000)
+      }
+      return {}
+    })
+  }, [])
+
+  const undoClearCart = useCallback(() => {
+    if (cartBeforeClear) {
+      setCart(cartBeforeClear)
+      setCartBeforeClear(null)
+      if (clearUndoTimerRef.current) clearTimeout(clearUndoTimerRef.current)
+    }
+  }, [cartBeforeClear])
 
   // ---- Dashboard operations ----
   const refreshDashboard = useCallback(async () => {
@@ -507,6 +531,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     })
   }, [])
 
+  const canUndoClearCart = useMemo(() => cartBeforeClear !== null, [cartBeforeClear])
+
   // ---- Settings ----
   const updateSettings = useCallback((patch: Partial<Settings>) => {
     setSettings((prev) => ({ ...prev, ...patch }))
@@ -577,6 +603,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setQuantity,
       setNote,
       clearCart,
+      undoClearCart,
+      canUndoClearCart,
       cartItemCount,
       cartLineCount,
       cartTemplates,
