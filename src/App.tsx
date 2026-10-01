@@ -1,4 +1,4 @@
-import { Route, Routes } from 'react-router-dom'
+import { Navigate, Route, Routes } from 'react-router-dom'
 import { AppProvider } from './hooks/useApp'
 import { Layout } from './components/Layout'
 import { CalculatorPage } from './pages/CalculatorPage'
@@ -14,14 +14,15 @@ export default function App() {
     <AppProvider>
       <Routes>
         <Route element={<Layout />}>
-          <Route index element={<CalculatorPage />} />
+          <Route index element={<DashboardPage />} />
+          <Route path="rechner" element={<CalculatorPage />} />
           <Route path="angebote" element={<AngebotePage />} />
           <Route path="kunden" element={<CustomersPage />} />
           <Route path="kategorien" element={<CategoriesPage />} />
           <Route path="preisliste" element={<PriceListPage />} />
-          <Route path="dashboard" element={<DashboardPage />} />
+          <Route path="dashboard" element={<Navigate to="/" replace />} />
           <Route path="einstellungen" element={<SettingsPage />} />
-          <Route path="*" element={<CalculatorPage />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>
     </AppProvider>

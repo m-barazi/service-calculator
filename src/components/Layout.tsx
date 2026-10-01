@@ -3,6 +3,7 @@ import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import {
   Calculator,
   FileText,
+  FolderKanban,
   LayoutDashboard,
   Menu,
   Receipt,
@@ -18,10 +19,11 @@ import { Logo } from './Logo'
 import { useApp } from '../hooks/useApp'
 
 const NAV = [
-  { to: '/', icon: Calculator, label: 'Rechner', end: true, group: 'primary' as const },
+  { to: '/', icon: LayoutDashboard, label: 'Dashboard', end: true, group: 'primary' as const },
+  { to: '/rechner', icon: Calculator, label: 'Rechner', end: true, group: 'primary' as const },
   { to: '/angebote', icon: FileText, label: 'Angebote', group: 'primary' as const },
   { to: '/kunden', icon: Users, label: 'Kunden', group: 'primary' as const },
-  { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', group: 'primary' as const },
+  { to: '/projekte', icon: FolderKanban, label: 'Projekte', group: 'more' as const },
   { to: '/kategorien', icon: Tags, label: 'Kategorien', group: 'more' as const },
   { to: '/preisliste', icon: Receipt, label: 'Preisliste', group: 'more' as const },
   { to: '/einstellungen', icon: SettingsIcon, label: 'Einstellungen', group: 'more' as const },

@@ -1,9 +1,11 @@
 import { Link } from 'react-router-dom'
 import {
   ArrowRight,
+  Calculator,
   CheckCircle,
   Clock,
   FileText,
+  FolderKanban,
   Mail,
   RefreshCw,
   Send,
@@ -12,6 +14,13 @@ import {
 } from 'lucide-react'
 import { useApp } from '../hooks/useApp'
 import { formatEUR, formatDate } from '../lib/format'
+
+const QUICK_LINKS: { to: string; label: string; icon: typeof FileText; description: string }[] = [
+  { to: '/rechner', label: 'Rechner', icon: Calculator, description: 'Neue Kalkulation starten' },
+  { to: '/angebote', label: 'Angebote', icon: FileText, description: 'Alle Angebote ansehen' },
+  { to: '/kunden', label: 'Kunden', icon: Mail, description: 'Kundenstammdaten verwalten' },
+  { to: '/projekte', label: 'Projekte', icon: FolderKanban, description: 'Projekte und Angebote gruppieren' },
+]
 
 const STATUS_META: Record<
   string,
@@ -68,6 +77,29 @@ export function DashboardPage() {
 
       {dashboard && (
         <>
+          {/* Quick links */}
+          <div className="mb-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {QUICK_LINKS.map((link) => {
+              const Icon = link.icon
+              return (
+                <Link
+                  key={link.to}
+                  to={link.to}
+                  className="group flex items-center gap-4 rounded-2xl border border-border bg-surface p-4 transition hover:border-border-strong hover:bg-surface/80"
+                >
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-canvas text-ink-soft transition group-hover:text-accent">
+                    <Icon className="h-5 w-5" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-ink">{link.label}</p>
+                    <p className="text-2xs text-ink-muted">{link.description}</p>
+                  </div>
+                  <ArrowRight className="h-4 w-4 shrink-0 text-ink-muted transition group-hover:text-ink" />
+                </Link>
+              )
+            })}
+          </div>
+
           {/* KPI cards */}
           <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <KpiCard
