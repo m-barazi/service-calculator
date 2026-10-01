@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react'
-import { Eye, EyeOff, Search, X } from 'lucide-react'
-import type { CartDiscountType } from '../types'
+import { Eye, EyeOff, GripVertical, Search, X } from 'lucide-react'
+import type { CartDiscountType, Category } from '../types'
+
+type DisplayCategory = Category & { count: number }
 import { useApp } from '../hooks/useApp'
 import { computeCart } from '../lib/calc'
 import { ServiceRow } from '../components/ServiceRow'
@@ -21,6 +23,7 @@ export function CalculatorPage() {
     settings,
     cartLineCount,
     categories: allCategories,
+    reorderCategories,
   } = useApp()
 
   const [search, setSearch] = useState('')
@@ -30,6 +33,11 @@ export function CalculatorPage() {
   const [createQuoteOpen, setCreateQuoteOpen] = useState(false)
   const [cartDiscountType, setCartDiscountType] = useState<CartDiscountType | undefined>(undefined)
   const [cartDiscountValue, setCartDiscountValue] = useState(0)
+
+  // Reordering state for drag & drop category sections
+  const [orderedCategories, setOrderedCategories] = useState<Category[] | null>(null)
+  const [draggingCategoryId, setDraggingCategoryId] = useState<string | null>(null)
+  const [dragOverCategoryId, setDragOverCategoryId] = useState<string | null>(null)
 
   // Visible services first, then by category
   const visibleServices = useMemo(
@@ -46,15 +54,21 @@ export function CalculatorPage() {
     return map
   }, [visibleServices])
 
-  const displayCategories = useMemo(
-    () =>
-      allCategories
-        .filter((c) => c.visible)
-        .sort((a, b) => a.sortOrder - b.sortOrder)
-        .map((c) => ({ ...c, count: categoryMap.get(c.id) ?? 0 }))
-        .filter((c) => c.count > 0),
-    [allCategories, categoryMap],
-  )
+  const displayCategories = useMemo<DisplayCategory[]>(() => {
+    const base: DisplayCategory[] = allCategories
+      .filter((c) => c.visible)
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .map((c) => ({ ...c, count: categoryMap.get(c.id) ?? 0 }))
+      .filter((c) => c.count > 0)
+    if (!orderedCategories) return base
+    const baseIds = new Set(base.map((c) => c.id))
+    return orderedCategories
+      .filter((c) => baseIds.has(c.id))
+      .map((c) => {
+        const original = base.find((b) => b.id === c.id)
+        return original ?? ({ ...c, count: categoryMap.get(c.id) ?? 0 } as DisplayCategory)
+      })
+  }, [allCategories, categoryMap, orderedCategories])
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -189,8 +203,43 @@ export function CalculatorPage() {
                   .sort((a, b) => Number(b.pinned) - Number(a.pinned) || a.name.localeCompare(b.name))
                 if (catServices.length === 0) return null
                 return (
-                  <div key={cat.id}>
-                    <div className="flex items-center gap-2 pt-2 pb-1">
+                  <div
+                    key={cat.id}
+                    draggable
+                    onDragStart={() => setDraggingCategoryId(cat.id)}
+                    onDragEnd={() => {
+                      setDraggingCategoryId(null)
+                      setDragOverCategoryId(null)
+                    }}
+                    onDragOver={(e) => {
+                      e.preventDefault()
+                      if (draggingCategoryId && draggingCategoryId !== cat.id) {
+                        setDragOverCategoryId(cat.id)
+                      }
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault()
+                      if (!draggingCategoryId || draggingCategoryId === cat.id) return
+                      const reordered = moveCategoryBefore(
+                        displayCategories,
+                        draggingCategoryId,
+                        cat.id,
+                      )
+                      setOrderedCategories(reordered)
+                      void reorderCategories(reordered.map((c) => c.id))
+                      setDragOverCategoryId(null)
+                    }}
+                    className={[
+                      'rounded-2xl transition',
+                      dragOverCategoryId === cat.id
+                        ? 'bg-accent/5 ring-1 ring-accent/40'
+                        : draggingCategoryId === cat.id
+                          ? 'opacity-50'
+                          : '',
+                    ].join(' ')}
+                  >
+                    <div className="flex items-center gap-2 pt-2 pb-1 px-1">
+                      <GripVertical className="h-4 w-4 cursor-grab text-ink-muted active:cursor-grabbing" />
                       {cat.icon && (
                         <span className="text-lg">{cat.icon}</span>
                       )}
@@ -300,6 +349,21 @@ export function CalculatorPage() {
       />
     </div>
   )
+}
+
+function moveCategoryBefore(
+  list: DisplayCategory[],
+  draggedId: string,
+  targetId: string,
+): DisplayCategory[] {
+  const draggedIndex = list.findIndex((c) => c.id === draggedId)
+  const targetIndex = list.findIndex((c) => c.id === targetId)
+  if (draggedIndex === -1 || targetIndex === -1) return list
+  const next = [...list]
+  const [dragged] = next.splice(draggedIndex, 1)
+  const insertAt = draggedIndex < targetIndex ? targetIndex : targetIndex
+  next.splice(insertAt, 0, dragged)
+  return next
 }
 
 function CategoryChip({

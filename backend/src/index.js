@@ -235,6 +235,36 @@ app.put('/api/categories/:id', async (req, res) => {
   }
 });
 
+app.post('/api/categories/reorder', async (req, res) => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'ids array is required' });
+    }
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      for (let i = 0; i < ids.length; i++) {
+        await client.query(
+          'UPDATE categories SET sort_order = $1, updated_at = NOW() WHERE id = $2',
+          [i, ids[i]]
+        );
+      }
+      await client.query('COMMIT');
+      const result = await client.query('SELECT * FROM categories ORDER BY sort_order, name');
+      res.json(result.rows.map(toCamelCategory));
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('Error reordering categories:', error);
+    res.status(500).json({ error: 'Failed to reorder categories' });
+  }
+});
+
 // ── Customer CRUD ───────────────────────────────────────────────────────
 
 app.get('/api/customers', async (req, res) => {

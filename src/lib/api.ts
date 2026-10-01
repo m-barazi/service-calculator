@@ -109,6 +109,17 @@ export async function updateCategory(id: string, patch: Partial<Category>): Prom
   return data
 }
 
+export async function reorderCategories(ids: string[]): Promise<Category[]> {
+  const res = await fetch(`${API_URL}/categories/reorder`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids }),
+  })
+  if (!res.ok) throw new Error(await extractError(res, 'Kategorien konnten nicht neu sortiert werden'))
+  const data = await res.json()
+  return data
+}
+
 export async function deleteCategory(id: string): Promise<void> {
   const res = await fetch(`${API_URL}/categories/${id}`, { method: 'DELETE' })
   if (res.status === 409) {

@@ -28,6 +28,7 @@ import {
   createCategory,
   updateCategory as updateCategoryApi,
   deleteCategory as deleteCategoryApi,
+  reorderCategories as reorderCategoriesApi,
   fetchCustomers,
   createCustomer,
   updateCustomer as updateCustomerApi,
@@ -81,6 +82,7 @@ interface AppState {
   addCategory: (c: Omit<Category, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>
   updateCategory: (id: string, patch: Partial<Category>) => Promise<void>
   deleteCategory: (id: string) => Promise<void>
+  reorderCategories: (ids: string[]) => Promise<void>
   refreshCategories: () => Promise<void>
 
   // Customers (loaded from API)
@@ -283,6 +285,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
       handleError(error, 'Failed to refresh categories')
     }
   }, [handleError])
+
+  const reorderCategories = useCallback(
+    async (ids: string[]) => {
+      try {
+        const updated = await reorderCategoriesApi(ids)
+        setCategories(updated)
+        toast.success('Kategorien neu sortiert')
+      } catch (error) {
+        handleError(error, 'Failed to reorder categories')
+        throw error
+      }
+    },
+    [handleError, toast],
+  )
 
   // ---- Customer operations ----
   const addCustomer = useCallback(
@@ -618,6 +634,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addCategory,
       updateCategory,
       deleteCategory,
+      reorderCategories,
       refreshCategories,
       customers,
       isLoadingCustomers,
@@ -665,6 +682,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addCategory,
       updateCategory,
       deleteCategory,
+      reorderCategories,
       refreshCategories,
       customers,
       isLoadingCustomers,
