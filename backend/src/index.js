@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import { Pool } from 'pg';
 import dotenv from 'dotenv';
+import { buildDashboardData } from './dashboard.js';
 
 dotenv.config();
 
@@ -690,7 +691,6 @@ app.patch('/api/quotes/:id/items/reorder', async (req, res) => {
 app.get('/api/dashboard', async (req, res) => {
   try {
     const vatRate = parseFloat(req.query.vatRate) || 0.19;
-    const vatFactor = 1 + vatRate;
 
     const [quotesResult, itemsResult, recentResult] = await Promise.all([
       pool.query('SELECT * FROM quotes'),
@@ -716,76 +716,9 @@ app.get('/api/dashboard', async (req, res) => {
     const allItems = itemsResult.rows.map(toCamelQuoteItem);
     const recentQuotes = recentResult.rows.map(toCamelQuote);
 
-    const quoteCount = quotes.length;
-    const quoteStatusCounts = { draft: 0, sent: 0, accepted: 0, rejected: 0 };
+    const data = buildDashboardData(quotes, allItems, recentQuotes, vatRate);
 
-    let acceptedTotalNet = 0;
-    let acceptedTotalGross = 0;
-
-    for (const quote of quotes) {
-      quoteStatusCounts[quote.status] = (quoteStatusCounts[quote.status] || 0) + 1;
-      if (quote.status !== 'accepted') continue;
-
-      const items = allItems.filter((i) => i.quoteId === quote.id);
-      let subtotal = 0;
-      for (const item of items) {
-        subtotal += item.quantity * item.unitPrice;
-      }
-
-      let discountAmount = 0;
-      if (quote.discountType === 'percent') {
-        discountAmount = subtotal * (quote.discountValue / 100);
-      } else if (quote.discountType === 'amount') {
-        discountAmount = quote.discountValue;
-      }
-      const totalNet = Math.max(0, subtotal - discountAmount);
-      const totalGross = totalNet * vatFactor;
-
-      acceptedTotalNet += totalNet;
-      acceptedTotalGross += totalGross;
-    }
-
-    // Top services by appearance in quotes
-    const serviceMap = new Map();
-    for (const item of allItems) {
-      const sid = item.serviceId || item.customName || 'custom';
-      const name = item.service ? item.service.name : (item.customName || 'Freitext');
-      const existing = serviceMap.get(sid) || { serviceId: sid, name, count: 0, totalGross: 0 };
-      existing.count += item.quantity;
-      existing.totalGross += item.quantity * item.unitPrice * vatFactor;
-      serviceMap.set(sid, existing);
-    }
-    const topServices = Array.from(serviceMap.values())
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 5);
-
-    // Estimated monthly recurring: accepted gross from last 90 days, annualized to monthly
-    const now = new Date();
-    const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
-    let accepted90DayGross = 0;
-    for (const quote of quotes) {
-      if (quote.status !== 'accepted') continue;
-      const created = new Date(quote.createdAt);
-      if (created < ninetyDaysAgo) continue;
-      const items = allItems.filter((i) => i.quoteId === quote.id);
-      let subtotal = 0;
-      for (const item of items) subtotal += item.quantity * item.unitPrice;
-      let discountAmount = 0;
-      if (quote.discountType === 'percent') discountAmount = subtotal * (quote.discountValue / 100);
-      else if (quote.discountType === 'amount') discountAmount = quote.discountValue;
-      accepted90DayGross += Math.max(0, subtotal - discountAmount) * vatFactor;
-    }
-    const estimatedMonthlyRecurring = accepted90DayGross / 3;
-
-    res.json({
-      quoteCount,
-      quoteStatusCounts,
-      acceptedTotalNet,
-      acceptedTotalGross,
-      estimatedMonthlyRecurring,
-      topServices,
-      recentQuotes,
-    });
+    res.json(data);
   } catch (error) {
     console.error('Error fetching dashboard:', error);
     res.status(500).json({ error: 'Failed to fetch dashboard' });

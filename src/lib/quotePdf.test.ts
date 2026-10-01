@@ -42,4 +42,21 @@ describe('formatCustomerAddress', () => {
       'Musterstraße 12\nMusterstadt\nDeutschland',
     )
   })
+
+  it('returns only the zip when city is missing', () => {
+    const customer = makeCustomer({ city: undefined })
+    expect(formatCustomerAddress(customer)).toBe(
+      'Musterstraße 12\n12345\nDeutschland',
+    )
+  })
+
+  it('returns empty string when customer has no address fields', () => {
+    const customer = makeCustomer({
+      street: undefined,
+      zip: undefined,
+      city: undefined,
+      country: undefined,
+    })
+    expect(formatCustomerAddress(customer)).toBe('')
+  })
 })

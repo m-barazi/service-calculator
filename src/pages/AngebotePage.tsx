@@ -15,6 +15,7 @@ import { useSearchParams } from 'react-router-dom'
 import { useApp } from '../hooks/useApp'
 import { computeQuoteTotals, getItemName } from '../lib/quoteCalc'
 import { generateQuotePdf } from '../lib/quotePdf'
+import { filterQuotes } from '../lib/quoteFilter'
 import { formatEUR, formatDate, formatPriceInput, parseGermanNumber } from '../lib/format'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { Modal } from '../components/Modal'
@@ -70,25 +71,10 @@ export function AngebotePage() {
   const [statusFilter, setStatusFilter] = useState<QuoteStatus | 'all'>('all')
 
   // ── Filter quotes ───────────────────────────────────────────────────────
-  const filteredQuotes = useMemo(() => {
-    const q = quoteSearch.trim().toLowerCase()
-    return quotes.filter((quote) => {
-      if (statusFilter !== 'all' && quote.status !== statusFilter) return false
-      if (!q) return true
-      const haystack = [
-        quote.title,
-        quote.quoteNumber,
-        quote.customerName,
-        quote.customer?.name,
-        quote.customer?.email,
-        quote.customer?.city,
-      ]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase()
-      return haystack.includes(q)
-    })
-  }, [quotes, quoteSearch, statusFilter])
+  const filteredQuotes = useMemo(
+    () => filterQuotes(quotes, { search: quoteSearch, status: statusFilter }),
+    [quotes, quoteSearch, statusFilter],
+  )
 
   // ── Computed totals for selected quote ──────────────────────────────────
   const totals: QuoteTotals | null = useMemo(() => {

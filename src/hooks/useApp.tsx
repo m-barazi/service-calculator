@@ -14,6 +14,7 @@ import {
   saveCart,
   saveSettings,
 } from '../lib/storage'
+import { buildCartQuoteItems } from '../lib/cartQuote'
 import {
   fetchServices,
   createService,
@@ -420,18 +421,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
           status: 'draft',
           discountValue: 0,
         })
-        const entries = Object.entries(cart)
-        let sortOrder = 0
-        for (const [serviceId, entry] of entries) {
-          const service = services.find((s) => s.id === serviceId)
-          if (!service || entry.quantity <= 0) continue
-          await addQuoteItemApi(created.id, {
-            serviceId: service.id,
-            unitPrice: service.salePrice,
-            quantity: entry.quantity,
-            customNote: entry.note || undefined,
-            sortOrder: sortOrder++,
-          })
+        const items = buildCartQuoteItems(cart, services)
+        for (const item of items) {
+          await addQuoteItemApi(created.id, item)
         }
         clearCart()
         const detail = await fetchQuoteApi(created.id)
