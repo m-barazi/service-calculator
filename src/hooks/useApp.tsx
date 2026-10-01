@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import type { Service, Settings, Category, Customer, Quote, QuoteWithItems, QuoteItem } from '../types'
+import type { Service, Settings, Category, Customer, Quote, QuoteWithItems, QuoteItem, DashboardData } from '../types'
 import {
   loadCart,
   loadSettings,
@@ -37,6 +37,7 @@ import {
   addQuoteItem as addQuoteItemApi,
   updateQuoteItem as updateQuoteItemApi,
   deleteQuoteItem as deleteQuoteItemApi,
+  fetchDashboard,
 } from '../lib/api'
 import { useTheme } from './useTheme'
 import { useToast } from './useToast'
@@ -91,6 +92,11 @@ interface AppState {
   updateItem: (quoteId: string, itemId: string, patch: Partial<QuoteItem>) => Promise<void>
   deleteItem: (quoteId: string, itemId: string) => Promise<void>
   createQuoteFromCart: (title: string, customerId?: string) => Promise<Quote>
+
+  // Dashboard (loaded from API)
+  dashboard: DashboardData | null
+  isLoadingDashboard: boolean
+  refreshDashboard: () => Promise<void>
 }
 
 const AppContext = createContext<AppState | null>(null)
@@ -105,6 +111,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [isLoadingCustomers, setIsLoadingCustomers] = useState(true)
   const [quotes, setQuotes] = useState<Quote[]>([])
   const [isLoadingQuotes, setIsLoadingQuotes] = useState(true)
+  const [dashboard, setDashboard] = useState<DashboardData | null>(null)
+  const [isLoadingDashboard, setIsLoadingDashboard] = useState(true)
   const [cart, setCart] = useState<Record<string, { quantity: number; note: string }>>(() => loadCart())
   const [settings, setSettings] = useState<Settings>(() => loadSettings())
 
@@ -115,16 +123,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const load = async () => {
       try {
-        const [servicesData, categoriesData, customersData, quotesData] = await Promise.all([
+        const [servicesData, categoriesData, customersData, quotesData, dashboardData] = await Promise.all([
           fetchServices(),
           fetchCategories(),
           fetchCustomers(),
           fetchQuotes(),
+          fetchDashboard(settings.vatRate),
         ])
         setServices(servicesData)
         setCategories(categoriesData)
         setCustomers(customersData)
         setQuotes(quotesData)
+        setDashboard(dashboardData)
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Daten konnten nicht geladen werden'
         console.error('Failed to load data:', error)
@@ -134,6 +144,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setIsLoadingCategories(false)
         setIsLoadingCustomers(false)
         setIsLoadingQuotes(false)
+        setIsLoadingDashboard(false)
       }
     }
     load()
@@ -309,6 +320,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const clearCart = useCallback(() => setCart({}), [])
 
+  // ---- Dashboard operations ----
+  const refreshDashboard = useCallback(async () => {
+    try {
+      const data = await fetchDashboard(settings.vatRate)
+      setDashboard(data)
+    } catch (error) {
+      handleError(error, 'Failed to refresh dashboard')
+    }
+  }, [settings.vatRate, handleError])
+
+  useEffect(() => {
+    refreshDashboard()
+  }, [settings.vatRate, refreshDashboard])
+
   // ---- Quote operations ----
   const addQuote = useCallback(
     async (q: Omit<Quote, 'id' | 'createdAt' | 'updatedAt'>) => {
@@ -316,35 +341,38 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const created = await createQuoteApi(q)
         setQuotes((prev) => [created, ...prev])
         toast.success('Angebot erstellt')
+        void refreshDashboard()
         return created
       } catch (error) {
         handleError(error, 'Failed to add quote')
         throw error
       }
     },
-    [handleError, toast],
+    [handleError, toast, refreshDashboard],
   )
 
   const updateQuote = useCallback(async (id: string, patch: Partial<Quote>) => {
     try {
       const updated = await updateQuoteApi(id, patch)
       setQuotes((prev) => prev.map((q) => (q.id === id ? updated : q)))
+      void refreshDashboard()
     } catch (error) {
       handleError(error, 'Failed to update quote')
       throw error
     }
-  }, [handleError])
+  }, [handleError, refreshDashboard])
 
   const deleteQuote = useCallback(async (id: string) => {
     try {
       await deleteQuoteApi(id)
       setQuotes((prev) => prev.filter((q) => q.id !== id))
       toast.success('Angebot gelöscht')
+      void refreshDashboard()
     } catch (error) {
       handleError(error, 'Failed to delete quote')
       throw error
     }
-  }, [handleError, toast])
+  }, [handleError, toast, refreshDashboard])
 
   const duplicateQuote = useCallback(
     async (id: string) => {
@@ -352,13 +380,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const copy = await duplicateQuoteApi(id)
         setQuotes((prev) => [copy, ...prev])
         toast.success('Angebot dupliziert')
+        void refreshDashboard()
         return copy
       } catch (error) {
         handleError(error, 'Failed to duplicate quote')
         throw error
       }
     },
-    [handleError, toast],
+    [handleError, toast, refreshDashboard],
   )
 
   const refreshQuotes = useCallback(async () => {
@@ -382,35 +411,39 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const addItem = useCallback(
     async (quoteId: string, item: Omit<import('../types').QuoteItem, 'id' | 'quoteId' | 'createdAt' | 'updatedAt'>) => {
       try {
-        return await addQuoteItemApi(quoteId, item)
+        const created = await addQuoteItemApi(quoteId, item)
+        void refreshDashboard()
+        return created
       } catch (error) {
         handleError(error, 'Failed to add quote item')
         throw error
       }
     },
-    [handleError],
+    [handleError, refreshDashboard],
   )
 
   const updateItem = useCallback(
     async (quoteId: string, itemId: string, patch: Partial<import('../types').QuoteItem>) => {
       try {
         await updateQuoteItemApi(quoteId, itemId, patch)
+        void refreshDashboard()
       } catch (error) {
         handleError(error, 'Failed to update quote item')
         throw error
       }
     },
-    [handleError],
+    [handleError, refreshDashboard],
   )
 
   const deleteItem = useCallback(async (quoteId: string, itemId: string) => {
     try {
       await deleteQuoteItemApi(quoteId, itemId)
+      void refreshDashboard()
     } catch (error) {
       handleError(error, 'Failed to delete quote item')
       throw error
     }
-  }, [handleError])
+  }, [handleError, refreshDashboard])
 
   const createQuoteFromCart = useCallback(
     async (title: string, customerId?: string) => {
@@ -429,13 +462,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const detail = await fetchQuoteApi(created.id)
         setQuotes((prev) => [detail, ...prev])
         toast.success('Angebot aus Warenkorb erstellt')
+        void refreshDashboard()
         return detail
       } catch (error) {
         handleError(error, 'Failed to create quote from cart')
         throw error
       }
     },
-    [cart, services, createQuoteApi, addQuoteItemApi, fetchQuoteApi, clearCart, handleError, toast],
+    [cart, services, createQuoteApi, addQuoteItemApi, fetchQuoteApi, clearCart, handleError, toast, refreshDashboard],
   )
 
   // ---- Cart operations ----
@@ -510,6 +544,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       updateItem,
       deleteItem,
       createQuoteFromCart,
+      dashboard,
+      isLoadingDashboard,
+      refreshDashboard,
     }),
     [
       services,
@@ -550,6 +587,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       updateItem,
       deleteItem,
       createQuoteFromCart,
+      dashboard,
+      isLoadingDashboard,
+      refreshDashboard,
     ],
   )
 

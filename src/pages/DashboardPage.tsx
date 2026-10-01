@@ -1,4 +1,3 @@
-import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   ArrowRight,
@@ -12,8 +11,6 @@ import {
   XCircle,
 } from 'lucide-react'
 import { useApp } from '../hooks/useApp'
-import { fetchDashboard } from '../lib/api'
-import type { DashboardData } from '../types'
 import { formatEUR, formatDate } from '../lib/format'
 
 const STATUS_META: Record<
@@ -27,31 +24,9 @@ const STATUS_META: Record<
 }
 
 export function DashboardPage() {
-  const { settings, customers } = useApp()
-  const [data, setData] = useState<DashboardData | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const { customers, dashboard, isLoadingDashboard, refreshDashboard } = useApp()
 
-  const load = async () => {
-    setIsLoading(true)
-    setError(null)
-    try {
-      const res = await fetchDashboard(settings.vatRate)
-      setData(res)
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Dashboard konnte nicht geladen werden'
-      setError(message)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    load()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settings.vatRate])
-
-  if (isLoading) {
+  if (isLoadingDashboard) {
     return (
       <div className="mx-auto max-w-7xl px-5 py-6 sm:px-8 sm:py-10">
         <div className="flex items-center justify-center py-20">
@@ -75,8 +50,8 @@ export function DashboardPage() {
           </p>
         </div>
         <button
-          onClick={load}
-          disabled={isLoading}
+          onClick={refreshDashboard}
+          disabled={isLoadingDashboard}
           className="btn-secondary self-start sm:self-auto"
         >
           <RefreshCw className="h-4 w-4" />
@@ -84,37 +59,31 @@ export function DashboardPage() {
         </button>
       </div>
 
-      {error && (
-        <div className="mb-6 rounded-xl bg-danger/10 p-4 text-sm text-danger">
-          {error}
-        </div>
-      )}
-
-      {!data && !error && (
+      {!dashboard && (
         <div className="card flex flex-col items-center justify-center gap-2 p-12 text-center">
           <TrendingUp className="h-8 w-8 text-ink-muted" strokeWidth={1.5} />
           <p className="text-sm font-medium text-ink">Keine Daten verfügbar</p>
         </div>
       )}
 
-      {data && (
+      {dashboard && (
         <>
           {/* KPI cards */}
           <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <KpiCard
               label="Angebote insgesamt"
-              value={String(data.quoteCount)}
+              value={String(dashboard.quoteCount)}
               icon={FileText}
             />
             <KpiCard
               label="Angenommen (Brutto)"
-              value={formatEUR(data.acceptedTotalGross)}
+              value={formatEUR(dashboard.acceptedTotalGross)}
               icon={CheckCircle}
               accent
             />
             <KpiCard
               label="Ø Monatsumsatz (90 Tage)"
-              value={formatEUR(data.estimatedMonthlyRecurring)}
+              value={formatEUR(dashboard.estimatedMonthlyRecurring)}
               icon={TrendingUp}
             />
             <KpiCard
@@ -130,10 +99,10 @@ export function DashboardPage() {
               <p className="eyebrow">Angebotsstatus</p>
               <h2 className="mt-1 text-lg font-semibold text-ink">Verteilung</h2>
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                {Object.entries(data.quoteStatusCounts).map(([status, count]) => {
+                {Object.entries(dashboard.quoteStatusCounts).map(([status, count]) => {
                   const meta = STATUS_META[status] ?? STATUS_META.draft
                   const Icon = meta.icon
-                  const pct = data.quoteCount > 0 ? Math.round((count / data.quoteCount) * 100) : 0
+                  const pct = dashboard.quoteCount > 0 ? Math.round((count / dashboard.quoteCount) * 100) : 0
                   return (
                     <div
                       key={status}
@@ -149,17 +118,18 @@ export function DashboardPage() {
                     </div>
                   )
                 })}
-              </div>            </div>
+              </div>
+            </div>
 
             {/* Top services */}
             <div className="card p-5">
               <p className="eyebrow">Beliebte Leistungen</p>
               <h2 className="mt-1 text-lg font-semibold text-ink">Top 5</h2>
-              {data.topServices.length === 0 ? (
+              {dashboard.topServices.length === 0 ? (
                 <p className="mt-4 text-sm text-ink-muted">Noch keine Leistungen in Angeboten.</p>
               ) : (
                 <div className="mt-4 flex flex-col gap-2">
-                  {data.topServices.map((s, idx) => (
+                  {dashboard.topServices.map((s, idx) => (
                     <div
                       key={s.serviceId}
                       className="flex items-center justify-between gap-3 rounded-xl border border-border bg-surface/40 p-3"
@@ -193,11 +163,11 @@ export function DashboardPage() {
                 <ArrowRight className="h-3.5 w-3.5" />
               </Link>
             </div>
-            {data.recentQuotes.length === 0 ? (
+            {dashboard.recentQuotes.length === 0 ? (
               <p className="text-sm text-ink-muted">Noch keine Angebote vorhanden.</p>
             ) : (
               <div className="flex flex-col gap-2">
-                {data.recentQuotes.map((quote) => {
+                {dashboard.recentQuotes.map((quote) => {
                   const meta = STATUS_META[quote.status] ?? STATUS_META.draft
                   return (
                     <Link
