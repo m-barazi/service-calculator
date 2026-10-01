@@ -71,3 +71,14 @@ export function formatPriceInput(n: number): string {
   if (!isFinite(n)) return '0,00'
   return n.toFixed(2).replace('.', ',')
 }
+
+const STATUS_LABELS: Record<string, string> = {
+  draft: 'Entwurf',
+  sent: 'Versendet',
+  accepted: 'Angenommen',
+  rejected: 'Abgelehnt',
+}
+
+export function formatQuoteStatus(status?: string): string {
+  return status ? STATUS_LABELS[status] ?? status : ''
+}

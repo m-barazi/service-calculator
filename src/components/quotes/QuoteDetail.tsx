@@ -1,23 +1,24 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   ArrowLeft,
   ChevronDown,
   Copy,
   Download,
   FileText,
+  History,
   Plus,
   Trash2,
 } from 'lucide-react'
 import { useApp } from '../../hooks/useApp'
 import { computeQuoteTotals } from '../../lib/quoteCalc'
 import { generateQuotePdf } from '../../lib/quotePdf'
-import { formatEUR, formatPriceInput, parseGermanNumber } from '../../lib/format'
+import { formatDateTime, formatEUR, formatPriceInput, formatQuoteStatus, parseGermanNumber } from '../../lib/format'
 import { CustomerSelect } from '../CustomerSelect'
 import { ItemRow } from './ItemRow'
 import { TotalRow } from './TotalRow'
 import { AddItemModal } from './AddItemModal'
 import { STATUS_MAP, STATUS_OPTIONS } from './status'
-import type { DiscountType, QuoteStatus, QuoteWithItems } from '../../types'
+import type { DiscountType, QuoteStatus, QuoteStatusHistoryEntry, QuoteWithItems } from '../../types'
 
 interface QuoteDetailProps {
   quote: QuoteWithItems
@@ -36,13 +37,41 @@ export function QuoteDetail({
   onDelete,
   isDuplicating,
 }: QuoteDetailProps) {
-  const { services, categories, settings, addItem, updateItem, deleteItem, updateQuote, fetchQuoteDetail } = useApp()
+  const {
+    services,
+    categories,
+    settings,
+    addItem,
+    updateItem,
+    deleteItem,
+    updateQuote,
+    updateQuoteStatus,
+    fetchQuoteDetail,
+    fetchQuoteHistory,
+  } = useApp()
   const [addItemModalOpen, setAddItemModalOpen] = useState(false)
   const [itemSearch, setItemSearch] = useState('')
   const [freeName, setFreeName] = useState('')
   const [freePrice, setFreePrice] = useState('')
+  const [history, setHistory] = useState<QuoteStatusHistoryEntry[]>([])
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const [isChangingStatus, setIsChangingStatus] = useState(false)
 
   const statusInfo = STATUS_MAP[q.status] ?? STATUS_MAP.draft
+
+  useEffect(() => {
+    let cancelled = false
+    fetchQuoteHistory(q.id)
+      .then((data) => {
+        if (!cancelled) setHistory(data)
+      })
+      .catch(() => {
+        // silently ignore; toast is handled by useApp
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [q.id, q.status, fetchQuoteHistory])
 
   const totals = useMemo(
     () => computeQuoteTotals(q.items, settings.vatRate, q.discountType, q.discountValue),
@@ -55,6 +84,21 @@ export function QuoteDetail({
       onUpdate({ ...q, ...patch })
     },
     [q, updateQuote, onUpdate],
+  )
+
+  const handleStatusChange = useCallback(
+    async (newStatus: QuoteStatus) => {
+      if (newStatus === q.status) return
+      setIsChangingStatus(true)
+      try {
+        await updateQuoteStatus(q.id, newStatus)
+        const detail = await fetchQuoteDetail(q.id)
+        onUpdate(detail)
+      } finally {
+        setIsChangingStatus(false)
+      }
+    },
+    [q.id, q.status, updateQuoteStatus, fetchQuoteDetail, onUpdate],
   )
 
   const refreshSelected = useCallback(async () => {
@@ -264,8 +308,9 @@ export function QuoteDetail({
               <div className="relative">
                 <select
                   value={q.status}
-                  onChange={(e) => handleQuoteChange({ status: e.target.value as QuoteStatus })}
-                  className="input appearance-none pr-10"
+                  onChange={(e) => handleStatusChange(e.target.value as QuoteStatus)}
+                  disabled={isChangingStatus}
+                  className="input appearance-none pr-10 disabled:opacity-60"
                 >
                   {STATUS_OPTIONS.map((opt) => (
                     <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -274,6 +319,45 @@ export function QuoteDetail({
                 <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted" />
               </div>
             </label>
+
+            {/* Status history */}
+            <div className="border-t border-border pt-4">
+              <button
+                onClick={() => setHistoryOpen((v) => !v)}
+                className="flex items-center gap-2 text-sm font-medium text-ink-soft transition hover:text-ink"
+              >
+                <History className="h-4 w-4" />
+                Status-Historie
+                <span className="badge-neutral text-2xs">{history.length}</span>
+              </button>
+              {historyOpen && (
+                <div className="mt-3 space-y-2">
+                  {history.length === 0 ? (
+                    <p className="text-2xs text-ink-muted">Noch keine Status-Änderungen.</p>
+                  ) : (
+                    history.map((entry) => (
+                      <div
+                        key={entry.id}
+                        className="flex items-center justify-between gap-3 rounded-lg border border-border bg-canvas/40 px-3 py-2"
+                      >
+                        <div className="flex items-center gap-2 text-xs">
+                          <span className="text-ink-muted">
+                            {entry.oldStatus ? formatQuoteStatus(entry.oldStatus) : '—'}
+                          </span>
+                          <span className="text-ink-muted">→</span>
+                          <span className="font-medium text-ink">
+                            {formatQuoteStatus(entry.newStatus)}
+                          </span>
+                        </div>
+                        <span className="text-2xs text-ink-muted">
+                          {formatDateTime(entry.createdAt)}
+                        </span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
 
             {/* Valid until */}
             <label className="block">

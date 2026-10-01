@@ -556,6 +556,74 @@ app.delete('/api/quotes/:id', async (req, res) => {
   }
 });
 
+// Quote status history
+app.get('/api/quotes/:id/history', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.query(
+      'SELECT * FROM quote_status_history WHERE quote_id = $1 ORDER BY created_at DESC',
+      [id]
+    );
+    res.json(result.rows.map(row => ({
+      id: row.id,
+      quoteId: row.quote_id,
+      oldStatus: row.old_status,
+      newStatus: row.new_status,
+      changedBy: row.changed_by,
+      createdAt: row.created_at,
+    })));
+  } catch (error) {
+    console.error('Error fetching quote status history:', error);
+    res.status(500).json({ error: 'Failed to fetch quote status history' });
+  }
+});
+
+app.post('/api/quotes/:id/status', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status, changedBy } = req.body;
+    const validStatuses = ['draft', 'sent', 'accepted', 'rejected'];
+    if (!status || !validStatuses.includes(status)) {
+      return res.status(400).json({ error: 'Invalid status' });
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const quoteResult = await client.query('SELECT status FROM quotes WHERE id = $1 FOR UPDATE', [id]);
+      if (quoteResult.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ error: 'Quote not found' });
+      }
+      const oldStatus = quoteResult.rows[0].status;
+      if (oldStatus === status) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'New status must differ from current status' });
+      }
+
+      const updateResult = await client.query(
+        'UPDATE quotes SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING *',
+        [status, id]
+      );
+      await client.query(
+        `INSERT INTO quote_status_history (quote_id, old_status, new_status, changed_by, created_at)
+         VALUES ($1, $2, $3, $4, NOW())`,
+        [id, oldStatus, status, changedBy || null]
+      );
+      await client.query('COMMIT');
+      res.json(toCamelQuote(updateResult.rows[0]));
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('Error updating quote status:', error);
+    res.status(500).json({ error: 'Failed to update quote status' });
+  }
+});
+
 // Duplicate quote
 app.post('/api/quotes/:id/duplicate', async (req, res) => {
   try {
@@ -968,6 +1036,19 @@ async function ensureTables() {
     ALTER TABLE quotes
     ADD COLUMN IF NOT EXISTS customer_id UUID REFERENCES customers(id) ON DELETE SET NULL
   `);
+
+  // Quote status history table
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS quote_status_history (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      quote_id UUID NOT NULL REFERENCES quotes(id) ON DELETE CASCADE,
+      old_status TEXT,
+      new_status TEXT NOT NULL,
+      changed_by TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_quote_status_history_quote ON quote_status_history(quote_id, created_at DESC)`);
 
   console.log('Database tables ensured');
 }

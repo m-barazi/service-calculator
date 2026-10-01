@@ -90,6 +90,18 @@ CREATE TABLE IF NOT EXISTS quote_items (
 
 CREATE INDEX IF NOT EXISTS idx_quote_items_quote ON quote_items(quote_id, sort_order);
 
+-- Quote status history
+CREATE TABLE IF NOT EXISTS quote_status_history (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  quote_id UUID NOT NULL REFERENCES quotes(id) ON DELETE CASCADE,
+  old_status VARCHAR(20),
+  new_status VARCHAR(20) NOT NULL,
+  changed_by VARCHAR(255),
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_quote_status_history_quote ON quote_status_history(quote_id, created_at DESC);
+
 -- Seed categories
 INSERT INTO categories (name, description, icon, color, sort_order) VALUES
   ('Print & Marketing', 'Druck- und Marketingdienstleistungen', '🖨️', '#10b981', 1),

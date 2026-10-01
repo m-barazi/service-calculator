@@ -162,6 +162,15 @@ export interface QuoteWithItems extends Quote {
   items: QuoteItem[]
 }
 
+export interface QuoteStatusHistoryEntry {
+  id: string
+  quoteId: string
+  oldStatus?: QuoteStatus
+  newStatus: QuoteStatus
+  changedBy?: string
+  createdAt: string
+}
+
 export interface QuoteTotals {
   subtotalNet: number
   discountAmount: number

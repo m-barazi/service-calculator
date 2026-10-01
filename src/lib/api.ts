@@ -348,6 +348,26 @@ export async function deleteQuote(id: string): Promise<void> {
   if (!res.ok && res.status !== 204) throw new Error(await extractError(res, 'Angebot konnte nicht gelöscht werden'))
 }
 
+export async function fetchQuoteStatusHistory(id: string): Promise<import('../types').QuoteStatusHistoryEntry[]> {
+  const res = await fetch(`${API_URL}/quotes/${id}/history`)
+  if (!res.ok) throw new Error(await extractError(res, 'Status-Historie konnte nicht geladen werden'))
+  return await res.json()
+}
+
+export async function updateQuoteStatus(
+  id: string,
+  status: import('../types').QuoteStatus,
+  changedBy?: string,
+): Promise<import('../types').Quote> {
+  const res = await fetch(`${API_URL}/quotes/${id}/status`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status, changedBy }),
+  })
+  if (!res.ok) throw new Error(await extractError(res, 'Status konnte nicht aktualisiert werden'))
+  return await res.json()
+}
+
 export async function duplicateQuote(id: string): Promise<Quote> {
   const res = await fetch(`${API_URL}/quotes/${id}/duplicate`, { method: 'POST' })
   if (!res.ok) throw new Error(await extractError(res, 'Angebot konnte nicht dupliziert werden'))

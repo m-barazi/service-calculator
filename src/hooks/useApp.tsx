@@ -8,7 +8,7 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import type { Service, Settings, Category, Customer, Quote, QuoteWithItems, QuoteItem, DashboardData, CartTemplate, CartItem } from '../types'
+import type { Service, Settings, Category, Customer, Quote, QuoteWithItems, QuoteItem, QuoteStatusHistoryEntry, DashboardData, CartTemplate, CartItem } from '../types'
 import {
   loadCart,
   loadSettings,
@@ -39,6 +39,8 @@ import {
   deleteQuote as deleteQuoteApi,
   duplicateQuote as duplicateQuoteApi,
   fetchQuote as fetchQuoteApi,
+  fetchQuoteStatusHistory,
+  updateQuoteStatus as updateQuoteStatusApi,
   addQuoteItem as addQuoteItemApi,
   updateQuoteItem as updateQuoteItemApi,
   deleteQuoteItem as deleteQuoteItemApi,
@@ -46,6 +48,7 @@ import {
 } from '../lib/api'
 import { useTheme } from './useTheme'
 import { useToast } from './useToast'
+import { formatQuoteStatus } from '../lib/format'
 
 interface AppState {
   // Services
@@ -100,8 +103,10 @@ interface AppState {
   updateQuote: (id: string, patch: Partial<Quote>) => Promise<void>
   deleteQuote: (id: string) => Promise<void>
   duplicateQuote: (id: string) => Promise<Quote>
+  updateQuoteStatus: (id: string, status: import('../types').QuoteStatus) => Promise<void>
   refreshQuotes: () => Promise<void>
   fetchQuoteDetail: (id: string) => Promise<QuoteWithItems>
+  fetchQuoteHistory: (id: string) => Promise<QuoteStatusHistoryEntry[]>
   addItem: (quoteId: string, item: Omit<QuoteItem, 'id' | 'quoteId' | 'createdAt' | 'updatedAt'>) => Promise<QuoteItem>
   updateItem: (quoteId: string, itemId: string, patch: Partial<QuoteItem>) => Promise<void>
   deleteItem: (quoteId: string, itemId: string) => Promise<void>
@@ -428,6 +433,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [handleError, toast, refreshDashboard])
 
+  const updateQuoteStatus = useCallback(
+    async (id: string, status: import('../types').QuoteStatus) => {
+      try {
+        const updated = await updateQuoteStatusApi(id, status)
+        setQuotes((prev) => prev.map((q) => (q.id === id ? updated : q)))
+        toast.success(`Status auf ${formatQuoteStatus(status)} geändert`)
+        void refreshDashboard()
+      } catch (error) {
+        handleError(error, 'Failed to update quote status')
+        throw error
+      }
+    },
+    [handleError, toast, refreshDashboard],
+  )
+
+  const fetchQuoteHistory = useCallback(async (id: string) => {
+    try {
+      return await fetchQuoteStatusHistory(id)
+    } catch (error) {
+      handleError(error, 'Failed to fetch quote status history')
+      throw error
+    }
+  }, [handleError])
+
   const duplicateQuote = useCallback(
     async (id: string) => {
       try {
@@ -648,6 +677,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       updateQuote,
       deleteQuote,
       duplicateQuote,
+      updateQuoteStatus,
+      fetchQuoteHistory,
       refreshQuotes,
       fetchQuoteDetail,
       addItem,
@@ -670,6 +701,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setQuantity,
       setNote,
       clearCart,
+      undoClearCart,
+      canUndoClearCart,
       updateSettings,
       cartItemCount,
       cartLineCount,
@@ -696,6 +729,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       updateQuote,
       deleteQuote,
       duplicateQuote,
+      updateQuoteStatus,
+      fetchQuoteHistory,
       refreshQuotes,
       fetchQuoteDetail,
       addItem,
