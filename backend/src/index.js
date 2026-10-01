@@ -1268,7 +1268,7 @@ app.get('/api/dashboard', async (req, res) => {
       pool.query(accepted90GrossSql, [vatFactor]),
       pool.query(`
         SELECT
-          COALESCE(qi.service_id, 'custom:' || COALESCE(qi.custom_name, 'custom')) AS service_id,
+          COALESCE(qi.service_id::text, 'custom:' || COALESCE(qi.custom_name, 'custom')) AS service_id,
           COALESCE(s.name, qi.custom_name, 'Freitext') AS name,
           SUM(qi.quantity)::int AS count,
           COALESCE(SUM(qi.quantity * qi.unit_price * $1), 0) AS total_gross
@@ -1505,6 +1505,31 @@ async function ensureTables() {
     ALTER TABLE quotes
     ADD COLUMN IF NOT EXISTS project_id UUID REFERENCES projects(id) ON DELETE SET NULL
   `);
+
+  // Invoices table
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS invoices (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      invoice_number VARCHAR(20) UNIQUE NOT NULL,
+      quote_id UUID REFERENCES quotes(id) ON DELETE SET NULL,
+      project_id UUID REFERENCES projects(id) ON DELETE SET NULL,
+      customer_id UUID REFERENCES customers(id) ON DELETE SET NULL,
+      customer_name TEXT,
+      title TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'draft',
+      due_date DATE,
+      paid_at TIMESTAMPTZ,
+      notes TEXT,
+      total_net NUMERIC NOT NULL DEFAULT 0,
+      total_gross NUMERIC NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_invoices_invoice_number ON invoices(invoice_number)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_invoices_status ON invoices(status)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_invoices_quote ON invoices(quote_id)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_invoices_created ON invoices(created_at DESC)`);
 
   console.log('Database tables ensured');
 }
