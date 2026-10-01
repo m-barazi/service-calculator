@@ -1274,7 +1274,7 @@ app.get('/api/dashboard', async (req, res) => {
           COALESCE(SUM(qi.quantity * qi.unit_price * $1), 0) AS total_gross
         FROM quote_items qi
         LEFT JOIN services s ON qi.service_id = s.id
-        GROUP BY service_id, name
+        GROUP BY qi.service_id, qi.custom_name, s.name
         ORDER BY count DESC
         LIMIT 5
       `, [vatFactor]),
