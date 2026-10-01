@@ -1,5 +1,5 @@
 /// <reference types="vite/client" />
-import type { Service, Category, Customer, Quote, QuoteItem, QuoteWithItems, DashboardData } from '../types'
+import type { Service, Category, Customer, Quote, QuoteItem, QuoteWithItems, DashboardData, Project, Invoice, InvoiceWithItems, InvoiceStatus } from '../types'
 
 const API_URL = import.meta.env.VITE_API_URL || '/api'
 
@@ -265,6 +265,64 @@ function toCamelCustomer(row: any): Customer {
   }
 }
 
+function toCamelProject(row: any): Project {
+  const project: Project = {
+    id: row.id,
+    name: row.name,
+    customerId: row.customer_id ?? row.customerId,
+    customerName: row.customer_name ?? row.customerName,
+    description: row.description,
+    status: row.status,
+    createdAt: row.created_at ?? row.createdAt,
+    updatedAt: row.updated_at ?? row.updatedAt,
+  }
+  if (row.customer_id && row.customer_name !== undefined) {
+    project.customer = toCamelCustomer(row)
+  }
+  return project
+}
+
+function toCamelInvoice(row: any): Invoice {
+  const invoice: Invoice = {
+    id: row.id,
+    invoiceNumber: row.invoice_number ?? row.invoiceNumber,
+    quoteId: row.quote_id ?? row.quoteId,
+    quoteNumber: row.quote_number ?? row.quoteNumber,
+    projectId: row.project_id ?? row.projectId,
+    projectName: row.project_name ?? row.projectName,
+    customerId: row.customer_id ?? row.customerId,
+    customerName: row.customer_name ?? row.customerName,
+    title: row.title,
+    status: row.status,
+    dueDate: row.due_date ?? row.dueDate,
+    paidAt: row.paid_at ?? row.paidAt,
+    notes: row.notes,
+    totalNet: parseFloat(row.total_net ?? row.totalNet ?? 0),
+    totalGross: parseFloat(row.total_gross ?? row.totalGross ?? 0),
+    createdAt: row.created_at ?? row.createdAt,
+    updatedAt: row.updated_at ?? row.updatedAt,
+  }
+  if (row.quote_id && row.quote_number !== undefined) {
+    invoice.quote = {
+      id: row.quote_id,
+      quoteNumber: row.quote_number,
+      title: row.quote_title,
+      status: row.quote_status,
+      customerId: row.quote_customer_id,
+      customerName: row.quote_customer_name,
+      projectId: row.quote_project_id,
+      projectName: row.quote_project_name,
+    } as Quote
+  }
+  if (row.customer_id && row.customer_name !== undefined) {
+    invoice.customer = toCamelCustomer(row)
+  }
+  if (row.project_id && row.project_name !== undefined) {
+    invoice.project = toCamelProject(row)
+  }
+  return invoice
+}
+
 function toCamelQuote(row: any): Quote {
   const quote: Quote = {
     id: row.id,
@@ -272,6 +330,8 @@ function toCamelQuote(row: any): Quote {
     title: row.title,
     customerName: row.customer_name ?? row.customerName,
     customerId: row.customer_id ?? row.customerId,
+    projectId: row.project_id ?? row.projectId,
+    projectName: row.project_name ?? row.projectName,
     status: row.status,
     discountType: row.discount_type ?? row.discountType,
     discountValue: parseFloat(row.discount_value ?? row.discountValue ?? 0),
@@ -282,6 +342,9 @@ function toCamelQuote(row: any): Quote {
   }
   if (row.customer_id && row.customer_name !== undefined) {
     quote.customer = toCamelCustomer(row)
+  }
+  if (row.project_id && row.project_name !== undefined) {
+    quote.project = toCamelProject(row)
   }
   return quote
 }
@@ -417,4 +480,94 @@ export async function fetchDashboard(vatRate: number): Promise<DashboardData> {
   const res = await fetch(`${API_URL}/dashboard?vatRate=${vatRate}`)
   if (!res.ok) throw new Error(await extractError(res, 'Dashboard-Daten konnten nicht geladen werden'))
   return res.json()
+}
+
+// ===== Project API =====
+
+export async function fetchProjects(): Promise<Project[]> {
+  const res = await fetch(`${API_URL}/projects`)
+  if (!res.ok) throw new Error(await extractError(res, 'Projekte konnten nicht geladen werden'))
+  const data = await res.json()
+  return data.map(toCamelProject)
+}
+
+export async function fetchProject(id: string): Promise<Project> {
+  const res = await fetch(`${API_URL}/projects/${id}`)
+  if (!res.ok) throw new Error(await extractError(res, 'Projekt konnte nicht geladen werden'))
+  return toCamelProject(await res.json())
+}
+
+export async function fetchProjectQuotes(id: string): Promise<Quote[]> {
+  const res = await fetch(`${API_URL}/projects/${id}/quotes`)
+  if (!res.ok) throw new Error(await extractError(res, 'Angebote des Projekts konnten nicht geladen werden'))
+  const data = await res.json()
+  return data.map(toCamelQuote)
+}
+
+export async function createProject(project: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>): Promise<Project> {
+  const res = await fetch(`${API_URL}/projects`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(project),
+  })
+  if (!res.ok) throw new Error(await extractError(res, 'Projekt konnte nicht erstellt werden'))
+  return toCamelProject(await res.json())
+}
+
+export async function updateProject(id: string, patch: Partial<Project>): Promise<Project> {
+  const res = await fetch(`${API_URL}/projects/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  })
+  if (!res.ok) throw new Error(await extractError(res, 'Projekt konnte nicht aktualisiert werden'))
+  return toCamelProject(await res.json())
+}
+
+export async function deleteProject(id: string): Promise<void> {
+  const res = await fetch(`${API_URL}/projects/${id}`, { method: 'DELETE' })
+  if (!res.ok && res.status !== 204) throw new Error(await extractError(res, 'Projekt konnte nicht gelöscht werden'))
+}
+
+// ===== Invoice API =====
+
+export async function fetchInvoices(): Promise<Invoice[]> {
+  const res = await fetch(`${API_URL}/invoices`)
+  if (!res.ok) throw new Error(await extractError(res, 'Rechnungen konnten nicht geladen werden'))
+  const data = await res.json()
+  return data.map(toCamelInvoice)
+}
+
+export async function fetchInvoice(id: string): Promise<InvoiceWithItems> {
+  const res = await fetch(`${API_URL}/invoices/${id}`)
+  if (!res.ok) throw new Error(await extractError(res, 'Rechnung konnte nicht geladen werden'))
+  const data = await res.json()
+  const invoice = toCamelInvoice(data) as InvoiceWithItems
+  invoice.items = (data.items ?? []).map(toCamelQuoteItem)
+  return invoice
+}
+
+export async function createInvoiceFromQuote(quoteId: string, vatRate: number): Promise<Invoice> {
+  const res = await fetch(`${API_URL}/quotes/${quoteId}/invoice`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ vatRate }),
+  })
+  if (!res.ok) throw new Error(await extractError(res, 'Rechnung konnte nicht erstellt werden'))
+  return toCamelInvoice(await res.json())
+}
+
+export async function updateInvoice(id: string, patch: Partial<Invoice>): Promise<Invoice> {
+  const res = await fetch(`${API_URL}/invoices/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  })
+  if (!res.ok) throw new Error(await extractError(res, 'Rechnung konnte nicht aktualisiert werden'))
+  return toCamelInvoice(await res.json())
+}
+
+export async function deleteInvoice(id: string): Promise<void> {
+  const res = await fetch(`${API_URL}/invoices/${id}`, { method: 'DELETE' })
+  if (!res.ok && res.status !== 204) throw new Error(await extractError(res, 'Rechnung konnte nicht gelöscht werden'))
 }

@@ -34,6 +34,22 @@ CREATE INDEX IF NOT EXISTS idx_services_visible ON services(visible);
 CREATE INDEX IF NOT EXISTS idx_services_name ON services(name);
 CREATE INDEX IF NOT EXISTS idx_services_pinned ON services(pinned DESC);
 
+-- Projects table
+CREATE TABLE IF NOT EXISTS projects (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name VARCHAR(255) NOT NULL,
+  customer_id UUID REFERENCES customers(id) ON DELETE SET NULL,
+  customer_name VARCHAR(255),
+  description TEXT,
+  status VARCHAR(20) NOT NULL DEFAULT 'active'
+    CHECK (status IN ('active', 'completed', 'on_hold', 'cancelled')),
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_projects_status ON projects(status);
+CREATE INDEX IF NOT EXISTS idx_projects_customer ON projects(customer_id);
+
 -- Customers table
 CREATE TABLE IF NOT EXISTS customers (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -60,6 +76,7 @@ CREATE TABLE IF NOT EXISTS quotes (
   customer_name VARCHAR(255),
   status VARCHAR(20) NOT NULL DEFAULT 'draft'
     CHECK (status IN ('draft', 'sent', 'accepted', 'rejected')),
+  project_id UUID REFERENCES projects(id) ON DELETE SET NULL,
   discount_type VARCHAR(10)
     CHECK (discount_type IS NULL OR discount_type IN ('percent', 'amount')),
   discount_value DECIMAL(10,4) DEFAULT 0,
@@ -101,6 +118,31 @@ CREATE TABLE IF NOT EXISTS quote_status_history (
 );
 
 CREATE INDEX IF NOT EXISTS idx_quote_status_history_quote ON quote_status_history(quote_id, created_at DESC);
+
+-- Invoices table
+CREATE TABLE IF NOT EXISTS invoices (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  invoice_number VARCHAR(20) UNIQUE NOT NULL,
+  quote_id UUID REFERENCES quotes(id) ON DELETE SET NULL,
+  project_id UUID REFERENCES projects(id) ON DELETE SET NULL,
+  customer_id UUID REFERENCES customers(id) ON DELETE SET NULL,
+  customer_name VARCHAR(255),
+  title VARCHAR(255) NOT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'draft'
+    CHECK (status IN ('draft', 'sent', 'paid', 'overdue', 'cancelled')),
+  due_date DATE,
+  paid_at TIMESTAMP WITH TIME ZONE,
+  notes TEXT,
+  total_net DECIMAL(10,4) NOT NULL DEFAULT 0,
+  total_gross DECIMAL(10,4) NOT NULL DEFAULT 0,
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_invoices_invoice_number ON invoices(invoice_number);
+CREATE INDEX IF NOT EXISTS idx_invoices_status ON invoices(status);
+CREATE INDEX IF NOT EXISTS idx_invoices_quote ON invoices(quote_id);
+CREATE INDEX IF NOT EXISTS idx_invoices_created ON invoices(created_at DESC);
 
 -- Seed categories
 INSERT INTO categories (name, description, icon, color, sort_order) VALUES

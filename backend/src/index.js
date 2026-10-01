@@ -67,6 +67,66 @@ function toCamelCustomer(row) {
   };
 }
 
+function toCamelProject(row) {
+  return {
+    id: row.id,
+    name: row.name,
+    customerId: row.customer_id,
+    customerName: row.customer_name,
+    description: row.description,
+    status: row.status,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function toCamelInvoice(row) {
+  const invoice = {
+    id: row.id,
+    invoiceNumber: row.invoice_number,
+    quoteId: row.quote_id,
+    quoteNumber: row.quote_number,
+    projectId: row.project_id,
+    projectName: row.project_name,
+    customerId: row.customer_id,
+    customerName: row.customer_name,
+    title: row.title,
+    status: row.status,
+    dueDate: row.due_date ? (row.due_date.toISOString ? row.due_date.toISOString().slice(0, 10) : String(row.due_date).slice(0, 10)) : null,
+    paidAt: row.paid_at,
+    notes: row.notes,
+    totalNet: parseFloat(row.total_net ?? 0),
+    totalGross: parseFloat(row.total_gross ?? 0),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+  if (row.quote_id && row.quote_number !== undefined) {
+    invoice.quote = {
+      id: row.quote_id,
+      quoteNumber: row.quote_number,
+      title: row.quote_title,
+      status: row.quote_status,
+      customerId: row.quote_customer_id,
+      customerName: row.quote_customer_name,
+      projectId: row.quote_project_id,
+      projectName: row.quote_project_name,
+    };
+  }
+  if (row.customer_id && row.customer_name !== undefined) {
+    invoice.customer = toCamelCustomer(row);
+  }
+  if (row.project_id && row.project_name !== undefined) {
+    invoice.project = {
+      id: row.project_id,
+      name: row.project_name,
+      customerId: row.project_customer_id,
+      customerName: row.project_customer_name,
+      status: row.project_status,
+    };
+  }
+  return invoice;
+}
+
 app.get('/api/services', async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM services ORDER BY pinned DESC, category_id, name');
@@ -383,6 +443,133 @@ app.delete('/api/categories/:id', async (req, res) => {
   }
 });
 
+// ── Project CRUD ────────────────────────────────────────────────────────
+
+app.get('/api/projects', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT p.*, c.name as customer_name
+      FROM projects p
+      LEFT JOIN customers c ON p.customer_id = c.id
+      ORDER BY p.created_at DESC
+    `);
+    res.json(result.rows.map(toCamelProject));
+  } catch (error) {
+    console.error('Error fetching projects:', error);
+    res.status(500).json({ error: 'Failed to fetch projects' });
+  }
+});
+
+app.get('/api/projects/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.query(`
+      SELECT p.*, c.name as customer_name
+      FROM projects p
+      LEFT JOIN customers c ON p.customer_id = c.id
+      WHERE p.id = $1
+    `, [id]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    res.json(toCamelProject(result.rows[0]));
+  } catch (error) {
+    console.error('Error fetching project:', error);
+    res.status(500).json({ error: 'Failed to fetch project' });
+  }
+});
+
+app.post('/api/projects', async (req, res) => {
+  try {
+    const { name, customerId, description, status } = req.body;
+    if (!name) {
+      return res.status(400).json({ error: 'Name is required' });
+    }
+    const validStatuses = ['active', 'completed', 'on_hold', 'cancelled'];
+    const safeStatus = status && validStatuses.includes(status) ? status : 'active';
+    const result = await pool.query(
+      `INSERT INTO projects (name, customer_id, description, status, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, NOW(), NOW())
+       RETURNING *`,
+      [name, customerId || null, description || null, safeStatus]
+    );
+    res.status(201).json(toCamelProject(result.rows[0]));
+  } catch (error) {
+    console.error('Error creating project:', error);
+    res.status(500).json({ error: 'Failed to create project' });
+  }
+});
+
+app.put('/api/projects/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, customerId, description, status } = req.body;
+
+    const sets = [];
+    const vals = [];
+    let idx = 1;
+
+    if (name !== undefined) { sets.push(`name = $${idx++}`); vals.push(name); }
+    if (customerId !== undefined) { sets.push(`customer_id = $${idx++}`); vals.push(customerId); }
+    if (description !== undefined) { sets.push(`description = $${idx++}`); vals.push(description); }
+    if (status !== undefined) { sets.push(`status = $${idx++}`); vals.push(status); }
+
+    if (sets.length === 0) {
+      return res.status(400).json({ error: 'No fields to update' });
+    }
+
+    sets.push(`updated_at = NOW()`);
+    vals.push(id);
+
+    const result = await pool.query(
+      `UPDATE projects SET ${sets.join(', ')} WHERE id = $${idx} RETURNING *`,
+      vals
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    res.json(toCamelProject(result.rows[0]));
+  } catch (error) {
+    console.error('Error updating project:', error);
+    res.status(500).json({ error: 'Failed to update project' });
+  }
+});
+
+app.delete('/api/projects/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.query('DELETE FROM projects WHERE id = $1 RETURNING *', [id]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    res.status(204).send();
+  } catch (error) {
+    console.error('Error deleting project:', error);
+    res.status(500).json({ error: 'Failed to delete project' });
+  }
+});
+
+app.get('/api/projects/:id/quotes', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.query(
+      `SELECT q.*, c.name as customer_name, c.email as customer_email, c.phone as customer_phone,
+              c.street as customer_street, c.zip as customer_zip, c.city as customer_city,
+              c.country as customer_country, c.notes as customer_notes,
+              c.created_at as customer_created_at, c.updated_at as customer_updated_at
+       FROM quotes q
+       LEFT JOIN customers c ON q.customer_id = c.id
+       WHERE q.project_id = $1
+       ORDER BY q.created_at DESC`,
+      [id]
+    );
+    res.json(result.rows.map(toCamelQuote));
+  } catch (error) {
+    console.error('Error fetching project quotes:', error);
+    res.status(500).json({ error: 'Failed to fetch project quotes' });
+  }
+});
+
 // ── Quote CRUD ───────────────────────────────────────────────────────────
 
 function toCamelQuote(row) {
@@ -392,6 +579,8 @@ function toCamelQuote(row) {
     title: row.title,
     customerName: row.customer_name,
     customerId: row.customer_id,
+    projectId: row.project_id,
+    projectName: row.project_name,
     status: row.status,
     discountType: row.discount_type,
     discountValue: parseFloat(row.discount_value ?? 0),
@@ -427,7 +616,15 @@ function toCamelQuoteItem(row) {
 
 app.get('/api/quotes', async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM quotes ORDER BY created_at DESC');
+    const result = await pool.query(`
+      SELECT q.*, c.name as customer_name, c.email as customer_email, c.phone as customer_phone,
+             c.street as customer_street, c.zip as customer_zip, c.city as customer_city,
+             c.country as customer_country, c.notes as customer_notes,
+             c.created_at as customer_created_at, c.updated_at as customer_updated_at
+      FROM quotes q
+      LEFT JOIN customers c ON q.customer_id = c.id
+      ORDER BY q.created_at DESC
+    `);
     res.json(result.rows.map(toCamelQuote));
   } catch (error) {
     console.error('Error fetching quotes:', error);
@@ -487,18 +684,62 @@ async function generateQuoteNumber() {
   return `${prefix}${String(next).padStart(4, '0')}`;
 }
 
+async function generateInvoiceNumber() {
+  const year = new Date().getFullYear();
+  const prefix = `RE-${year}-`;
+  const result = await pool.query(
+    `SELECT invoice_number FROM invoices WHERE invoice_number LIKE $1 ORDER BY invoice_number DESC LIMIT 1`,
+    [`${prefix}%`]
+  );
+  let next = 1;
+  if (result.rows.length > 0) {
+    const last = result.rows[0].invoice_number;
+    const match = last.match(/-(\d+)$/);
+    if (match) {
+      next = parseInt(match[1], 10) + 1;
+    }
+  }
+  return `${prefix}${String(next).padStart(4, '0')}`;
+}
+
+async function computeQuoteTotalsForInvoice(quoteId, vatRate) {
+  const result = await pool.query(
+    `SELECT
+      COALESCE(SUM(qi.quantity * qi.unit_price), 0) AS subtotal,
+      q.discount_type,
+      q.discount_value
+    FROM quotes q
+    LEFT JOIN quote_items qi ON q.id = qi.quote_id
+    WHERE q.id = $1
+    GROUP BY q.id, q.discount_type, q.discount_value`,
+    [quoteId]
+  );
+  if (result.rows.length === 0) return null;
+  const row = result.rows[0];
+  const subtotal = parseFloat(row.subtotal);
+  let discount = 0;
+  if (row.discount_type === 'percent') {
+    discount = subtotal * (parseFloat(row.discount_value) / 100);
+  } else if (row.discount_type === 'amount') {
+    discount = parseFloat(row.discount_value);
+  }
+  const totalNet = Math.max(0, subtotal - discount);
+  const totalGross = totalNet * (1 + vatRate);
+  return { totalNet, totalGross };
+}
+
 app.post('/api/quotes', async (req, res) => {
   try {
-    const { title, customerId, customerName, status, discountType, discountValue, notes, validUntil } = req.body;
+    const { title, customerId, customerName, projectId, status, discountType, discountValue, notes, validUntil } = req.body;
     if (!title) {
       return res.status(400).json({ error: 'Title is required' });
     }
     const quoteNumber = await generateQuoteNumber();
     const result = await pool.query(
-      `INSERT INTO quotes (quote_number, title, customer_id, customer_name, status, discount_type, discount_value, notes, valid_until, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())
+      `INSERT INTO quotes (quote_number, title, customer_id, customer_name, project_id, status, discount_type, discount_value, notes, valid_until, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())
        RETURNING *`,
-      [quoteNumber, title, customerId || null, customerName || null, status || 'draft', discountType || null, discountValue ?? 0, notes || null, validUntil || null]
+      [quoteNumber, title, customerId || null, customerName || null, projectId || null, status || 'draft', discountType || null, discountValue ?? 0, notes || null, validUntil || null]
     );
     res.status(201).json(toCamelQuote(result.rows[0]));
   } catch (error) {
@@ -510,7 +751,7 @@ app.post('/api/quotes', async (req, res) => {
 app.put('/api/quotes/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, customerId, customerName, status, discountType, discountValue, notes, validUntil } = req.body;
+    const { title, customerId, customerName, projectId, status, discountType, discountValue, notes, validUntil } = req.body;
 
     const sets = [];
     const vals = [];
@@ -519,6 +760,7 @@ app.put('/api/quotes/:id', async (req, res) => {
     if (title !== undefined) { sets.push(`title = $${idx++}`); vals.push(title); }
     if (customerId !== undefined) { sets.push(`customer_id = $${idx++}`); vals.push(customerId); }
     if (customerName !== undefined) { sets.push(`customer_name = $${idx++}`); vals.push(customerName); }
+    if (projectId !== undefined) { sets.push(`project_id = $${idx++}`); vals.push(projectId); }
     if (status !== undefined) { sets.push(`status = $${idx++}`); vals.push(status); }
     if (discountType !== undefined) { sets.push(`discount_type = $${idx++}`); vals.push(discountType); }
     if (discountValue !== undefined) { sets.push(`discount_value = $${idx++}`); vals.push(discountValue); }
@@ -637,14 +879,15 @@ app.post('/api/quotes/:id/duplicate', async (req, res) => {
 
     const quoteNumber = await generateQuoteNumber();
     const newQuoteResult = await pool.query(
-      `INSERT INTO quotes (quote_number, title, customer_id, customer_name, status, discount_type, discount_value, notes, valid_until, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())
+      `INSERT INTO quotes (quote_number, title, customer_id, customer_name, project_id, status, discount_type, discount_value, notes, valid_until, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())
        RETURNING *`,
       [
         quoteNumber,
         `${original.title} (Kopie)`,
         original.customer_id,
         original.customer_name,
+        original.project_id,
         'draft',
         original.discount_type,
         original.discount_value,
@@ -781,6 +1024,190 @@ app.patch('/api/quotes/:id/items/reorder', async (req, res) => {
   } catch (error) {
     console.error('Error reordering quote items:', error);
     res.status(500).json({ error: 'Failed to reorder items' });
+  }
+});
+
+// ── Invoice CRUD ────────────────────────────────────────────────────────
+
+app.get('/api/invoices', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT i.*,
+             q.quote_number, q.title as quote_title, q.status as quote_status,
+             q.customer_id as quote_customer_id, q.customer_name as quote_customer_name,
+             q.project_id as quote_project_id,
+             c.name as customer_name, c.email as customer_email, c.phone as customer_phone,
+             c.street as customer_street, c.zip as customer_zip, c.city as customer_city,
+             c.country as customer_country, c.notes as customer_notes,
+             c.created_at as customer_created_at, c.updated_at as customer_updated_at,
+             p.name as project_name, p.status as project_status, p.customer_id as project_customer_id,
+             pc.name as project_customer_name
+      FROM invoices i
+      LEFT JOIN quotes q ON i.quote_id = q.id
+      LEFT JOIN customers c ON i.customer_id = c.id
+      LEFT JOIN projects p ON i.project_id = p.id
+      LEFT JOIN customers pc ON p.customer_id = pc.id
+      ORDER BY i.created_at DESC
+    `);
+    res.json(result.rows.map(toCamelInvoice));
+  } catch (error) {
+    console.error('Error fetching invoices:', error);
+    res.status(500).json({ error: 'Failed to fetch invoices' });
+  }
+});
+
+app.get('/api/invoices/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const invoiceResult = await pool.query(`
+      SELECT i.*,
+             q.quote_number, q.title as quote_title, q.status as quote_status,
+             q.customer_id as quote_customer_id, q.customer_name as quote_customer_name,
+             q.project_id as quote_project_id,
+             c.name as customer_name, c.email as customer_email, c.phone as customer_phone,
+             c.street as customer_street, c.zip as customer_zip, c.city as customer_city,
+             c.country as customer_country, c.notes as customer_notes,
+             c.created_at as customer_created_at, c.updated_at as customer_updated_at,
+             p.name as project_name, p.status as project_status, p.customer_id as project_customer_id,
+             pc.name as project_customer_name
+      FROM invoices i
+      LEFT JOIN quotes q ON i.quote_id = q.id
+      LEFT JOIN customers c ON i.customer_id = c.id
+      LEFT JOIN projects p ON i.project_id = p.id
+      LEFT JOIN customers pc ON p.customer_id = pc.id
+      WHERE i.id = $1
+    `, [id]);
+    if (invoiceResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Invoice not found' });
+    }
+    const invoice = toCamelInvoice(invoiceResult.rows[0]);
+
+    // Include items from linked quote if available
+    if (invoice.quoteId) {
+      const itemsResult = await pool.query(`
+        SELECT qi.*, s.name as service_name, s.purchase_price as service_purchase_price,
+               s.sale_price as service_sale_price, s.category_id as service_category_id
+        FROM quote_items qi
+        LEFT JOIN services s ON qi.service_id = s.id
+        WHERE qi.quote_id = $1
+        ORDER BY qi.sort_order, qi.created_at
+      `, [invoice.quoteId]);
+      invoice.items = itemsResult.rows.map(toCamelQuoteItem);
+    } else {
+      invoice.items = [];
+    }
+
+    res.json(invoice);
+  } catch (error) {
+    console.error('Error fetching invoice:', error);
+    res.status(500).json({ error: 'Failed to fetch invoice' });
+  }
+});
+
+app.post('/api/quotes/:id/invoice', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const vatRate = parseFloat(req.body.vatRate) || 0.19;
+
+    const quoteResult = await pool.query(`
+      SELECT q.*, c.name as customer_name
+      FROM quotes q
+      LEFT JOIN customers c ON q.customer_id = c.id
+      WHERE q.id = $1
+    `, [id]);
+    if (quoteResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Quote not found' });
+    }
+    const quote = quoteResult.rows[0];
+    if (quote.status !== 'accepted') {
+      return res.status(400).json({ error: 'Invoice can only be created from accepted quotes' });
+    }
+
+    const existing = await pool.query('SELECT id FROM invoices WHERE quote_id = $1 LIMIT 1', [id]);
+    if (existing.rows.length > 0) {
+      return res.status(409).json({ error: 'Invoice already exists for this quote' });
+    }
+
+    const totals = await computeQuoteTotalsForInvoice(id, vatRate);
+    if (!totals) {
+      return res.status(500).json({ error: 'Failed to compute invoice totals' });
+    }
+
+    const invoiceNumber = await generateInvoiceNumber();
+    const title = `Rechnung zu ${quote.title}`;
+    const result = await pool.query(
+      `INSERT INTO invoices (invoice_number, quote_id, project_id, customer_id, customer_name, title, status, total_net, total_gross, notes, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())
+       RETURNING *`,
+      [invoiceNumber, id, quote.project_id, quote.customer_id, quote.customer_name, title, 'draft', totals.totalNet, totals.totalGross, quote.notes || null]
+    );
+
+    const invoice = toCamelInvoice(result.rows[0]);
+    invoice.items = [];
+    res.status(201).json(invoice);
+  } catch (error) {
+    console.error('Error creating invoice:', error);
+    res.status(500).json({ error: 'Failed to create invoice' });
+  }
+});
+
+app.put('/api/invoices/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status, dueDate, paidAt, notes } = req.body;
+    const validStatuses = ['draft', 'sent', 'paid', 'overdue', 'cancelled'];
+
+    const sets = [];
+    const vals = [];
+    let idx = 1;
+
+    if (status !== undefined) {
+      if (!validStatuses.includes(status)) {
+        return res.status(400).json({ error: 'Invalid status' });
+      }
+      sets.push(`status = $${idx++}`);
+      vals.push(status);
+      if (status === 'paid' && paidAt === undefined) {
+        sets.push(`paid_at = $${idx++}`);
+        vals.push(new Date().toISOString());
+      }
+    }
+    if (dueDate !== undefined) { sets.push(`due_date = $${idx++}`); vals.push(dueDate || null); }
+    if (paidAt !== undefined) { sets.push(`paid_at = $${idx++}`); vals.push(paidAt || null); }
+    if (notes !== undefined) { sets.push(`notes = $${idx++}`); vals.push(notes || null); }
+
+    if (sets.length === 0) {
+      return res.status(400).json({ error: 'No fields to update' });
+    }
+
+    sets.push(`updated_at = NOW()`);
+    vals.push(id);
+
+    const result = await pool.query(
+      `UPDATE invoices SET ${sets.join(', ')} WHERE id = $${idx} RETURNING *`,
+      vals
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Invoice not found' });
+    }
+    res.json(toCamelInvoice(result.rows[0]));
+  } catch (error) {
+    console.error('Error updating invoice:', error);
+    res.status(500).json({ error: 'Failed to update invoice' });
+  }
+});
+
+app.delete('/api/invoices/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.query('DELETE FROM invoices WHERE id = $1 RETURNING *', [id]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Invoice not found' });
+    }
+    res.status(204).send();
+  } catch (error) {
+    console.error('Error deleting invoice:', error);
+    res.status(500).json({ error: 'Failed to delete invoice' });
   }
 });
 
@@ -1049,6 +1476,28 @@ async function ensureTables() {
     )
   `);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_quote_status_history_quote ON quote_status_history(quote_id, created_at DESC)`);
+
+  // Projects table
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS projects (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      name TEXT NOT NULL,
+      customer_id UUID REFERENCES customers(id) ON DELETE SET NULL,
+      customer_name TEXT,
+      description TEXT,
+      status TEXT NOT NULL DEFAULT 'active',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_projects_status ON projects(status)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_projects_customer ON projects(customer_id)`);
+
+  // Migration: add project_id to existing quotes tables
+  await pool.query(`
+    ALTER TABLE quotes
+    ADD COLUMN IF NOT EXISTS project_id UUID REFERENCES projects(id) ON DELETE SET NULL
+  `);
 
   console.log('Database tables ensured');
 }

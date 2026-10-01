@@ -11,6 +11,9 @@ export interface QuotePdfOptions {
   projectTitle?: string
   notes?: string
   showProfit: boolean // only used for internal mode
+  documentTitle?: string // e.g. 'RECHNUNG'
+  documentNumber?: string // override number shown in header
+  dueDate?: string // shown as 'Fällig am' instead of quote validUntil
 }
 
 // ── Visual constants (same as pdf.ts) ─────────────────────────────────────
@@ -109,14 +112,16 @@ export function generateQuotePdf(
   doc.text(settings.companyTagline, markX + markSize + 14, markY + 30)
 
   // Right-aligned meta
+  const documentTitle = opts.documentTitle ?? 'ANGEBOT'
+  const documentNumber = opts.documentNumber ?? quote.quoteNumber
   doc.setFontSize(8.5)
   doc.setTextColor(INK_MUTED[0], INK_MUTED[1], INK_MUTED[2])
   const metaRightX = pageW - M
-  doc.text('ANGEBOT', metaRightX, markY + 6, { align: 'right' })
+  doc.text(documentTitle, metaRightX, markY + 6, { align: 'right' })
   doc.setFontSize(9.5)
   doc.setTextColor(INK[0], INK[1], INK[2])
-  if (quote.quoteNumber) {
-    doc.text(quote.quoteNumber, metaRightX, markY + 20, { align: 'right' })
+  if (documentNumber) {
+    doc.text(documentNumber, metaRightX, markY + 20, { align: 'right' })
     doc.setFontSize(8.5)
     doc.setTextColor(INK_MUTED[0], INK_MUTED[1], INK_MUTED[2])
     doc.text(formatDate(new Date()), metaRightX, markY + 34, { align: 'right' })
@@ -148,8 +153,14 @@ export function generateQuotePdf(
     y += 8
   }
 
-  // Valid until
-  if (quote.validUntil) {
+  // Valid until / due date
+  if (opts.dueDate) {
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(10)
+    doc.setTextColor(INK_SOFT[0], INK_SOFT[1], INK_SOFT[2])
+    doc.text(`Fällig am: ${formatDate(opts.dueDate)}`, M, y)
+    y += 18
+  } else if (quote.validUntil) {
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(10)
     doc.setTextColor(INK_SOFT[0], INK_SOFT[1], INK_SOFT[2])
@@ -298,7 +309,8 @@ export function generateQuotePdf(
     .replace(/[^a-zA-Z0-9äöüÄÖÜß _-]/g, '')
     .trim()
     .replace(/\s+/g, '_')
-  const suffix = isInternal ? 'Intern' : 'Angebot'
+  const defaultSuffix = isInternal ? 'Intern' : 'Angebot'
+  const suffix = opts.documentTitle === 'RECHNUNG' ? 'Rechnung' : defaultSuffix
   const dateStamp = new Date().toISOString().slice(0, 10)
   const filename = `${safeName || 'Angebot'}_${dateStamp}_${suffix}.pdf`
 

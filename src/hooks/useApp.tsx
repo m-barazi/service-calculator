@@ -8,7 +8,7 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import type { Service, Settings, Category, Customer, Quote, QuoteWithItems, QuoteItem, QuoteStatusHistoryEntry, DashboardData, CartTemplate, CartItem } from '../types'
+import type { Service, Settings, Category, Customer, Quote, QuoteWithItems, QuoteItem, QuoteStatusHistoryEntry, DashboardData, CartTemplate, CartItem, Project, Invoice, InvoiceWithItems, InvoiceStatus } from '../types'
 import {
   loadCart,
   loadSettings,
@@ -33,6 +33,11 @@ import {
   createCustomer,
   updateCustomer as updateCustomerApi,
   deleteCustomer as deleteCustomerApi,
+  fetchProjects,
+  createProject as createProjectApi,
+  updateProject as updateProjectApi,
+  deleteProject as deleteProjectApi,
+  fetchProjectQuotes,
   fetchQuotes,
   createQuote as createQuoteApi,
   updateQuote as updateQuoteApi,
@@ -45,6 +50,11 @@ import {
   updateQuoteItem as updateQuoteItemApi,
   deleteQuoteItem as deleteQuoteItemApi,
   fetchDashboard,
+  fetchInvoices,
+  fetchInvoice as fetchInvoiceApi,
+  createInvoiceFromQuote as createInvoiceFromQuoteApi,
+  updateInvoice as updateInvoiceApi,
+  deleteInvoice as deleteInvoiceApi,
 } from '../lib/api'
 import { useTheme } from './useTheme'
 import { useToast } from './useToast'
@@ -110,7 +120,25 @@ interface AppState {
   addItem: (quoteId: string, item: Omit<QuoteItem, 'id' | 'quoteId' | 'createdAt' | 'updatedAt'>) => Promise<QuoteItem>
   updateItem: (quoteId: string, itemId: string, patch: Partial<QuoteItem>) => Promise<void>
   deleteItem: (quoteId: string, itemId: string) => Promise<void>
-  createQuoteFromCart: (title: string, customerId?: string) => Promise<Quote>
+  createQuoteFromCart: (title: string, customerId?: string, projectId?: string) => Promise<Quote>
+
+  // Projects (loaded from API)
+  projects: Project[]
+  isLoadingProjects: boolean
+  addProject: (p: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>) => Promise<Project>
+  updateProject: (id: string, patch: Partial<Project>) => Promise<void>
+  deleteProject: (id: string) => Promise<void>
+  refreshProjects: () => Promise<void>
+  fetchProjectQuotes: (id: string) => Promise<Quote[]>
+
+  // Invoices (loaded from API)
+  invoices: Invoice[]
+  isLoadingInvoices: boolean
+  addInvoiceFromQuote: (quoteId: string) => Promise<Invoice>
+  updateInvoice: (id: string, patch: Partial<Invoice>) => Promise<void>
+  deleteInvoice: (id: string) => Promise<void>
+  refreshInvoices: () => Promise<void>
+  fetchInvoiceDetail: (id: string) => Promise<InvoiceWithItems>
 
   // Dashboard (loaded from API)
   dashboard: DashboardData | null
@@ -130,6 +158,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [isLoadingCustomers, setIsLoadingCustomers] = useState(true)
   const [quotes, setQuotes] = useState<Quote[]>([])
   const [isLoadingQuotes, setIsLoadingQuotes] = useState(true)
+  const [projects, setProjects] = useState<Project[]>([])
+  const [isLoadingProjects, setIsLoadingProjects] = useState(true)
+  const [invoices, setInvoices] = useState<Invoice[]>([])
+  const [isLoadingInvoices, setIsLoadingInvoices] = useState(true)
   const [dashboard, setDashboard] = useState<DashboardData | null>(null)
   const [isLoadingDashboard, setIsLoadingDashboard] = useState(true)
   const [cart, setCart] = useState<Record<string, { quantity: number; note: string }>>(() => loadCart())
@@ -145,17 +177,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const load = async () => {
       try {
-        const [servicesData, categoriesData, customersData, quotesData, dashboardData] = await Promise.all([
+        const [servicesData, categoriesData, customersData, quotesData, projectsData, invoicesData, dashboardData] = await Promise.all([
           fetchServices(),
           fetchCategories(),
           fetchCustomers(),
           fetchQuotes(),
+          fetchProjects(),
+          fetchInvoices(),
           fetchDashboard(settings.vatRate),
         ])
         setServices(servicesData)
         setCategories(categoriesData)
         setCustomers(customersData)
         setQuotes(quotesData)
+        setProjects(projectsData)
+        setInvoices(invoicesData)
         setDashboard(dashboardData)
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Daten konnten nicht geladen werden'
@@ -166,6 +202,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setIsLoadingCategories(false)
         setIsLoadingCustomers(false)
         setIsLoadingQuotes(false)
+        setIsLoadingProjects(false)
+        setIsLoadingInvoices(false)
         setIsLoadingDashboard(false)
       }
     }
@@ -349,6 +387,69 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [handleError, toast])
 
+  // ---- Project operations ----
+  const addProject = useCallback(
+    async (p: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>) => {
+      try {
+        const created = await createProjectApi(p)
+        setProjects((prev) => [created, ...prev])
+        toast.success('Projekt erstellt')
+        return created
+      } catch (error) {
+        handleError(error, 'Failed to add project')
+        throw error
+      }
+    },
+    [handleError, toast],
+  )
+
+  const updateProject = useCallback(async (id: string, patch: Partial<Project>) => {
+    try {
+      const updated = await updateProjectApi(id, patch)
+      setProjects((prev) =>
+        prev.map((p) => (p.id === id ? updated : p)),
+      )
+      // Also update project data in cached quotes
+      setQuotes((prev) =>
+        prev.map((q) => (q.projectId === id ? { ...q, project: updated, projectName: updated.name } : q)),
+      )
+      toast.success('Projekt aktualisiert')
+    } catch (error) {
+      handleError(error, 'Failed to update project')
+      throw error
+    }
+  }, [handleError, toast])
+
+  const deleteProject = useCallback(async (id: string) => {
+    try {
+      await deleteProjectApi(id)
+      setProjects((prev) => prev.filter((p) => p.id !== id))
+      setQuotes((prev) => prev.map((q) => (q.projectId === id ? { ...q, projectId: undefined, projectName: undefined, project: undefined } : q)))
+      toast.success('Projekt gelöscht')
+    } catch (error) {
+      handleError(error, 'Failed to delete project')
+      throw error
+    }
+  }, [handleError, toast])
+
+  const refreshProjects = useCallback(async () => {
+    try {
+      const data = await fetchProjects()
+      setProjects(data)
+    } catch (error) {
+      handleError(error, 'Failed to refresh projects')
+    }
+  }, [handleError])
+
+  const fetchProjectQuotesHandler = useCallback(async (id: string) => {
+    try {
+      return await fetchProjectQuotes(id)
+    } catch (error) {
+      handleError(error, 'Failed to fetch project quotes')
+      throw error
+    }
+  }, [handleError])
+
   const refreshCustomers = useCallback(async () => {
     try {
       const data = await fetchCustomers()
@@ -392,6 +493,71 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     refreshDashboard()
   }, [settings.vatRate, refreshDashboard])
+
+  // ---- Invoice operations ----
+  const refreshInvoices = useCallback(async () => {
+    try {
+      const data = await fetchInvoices()
+      setInvoices(data)
+    } catch (error) {
+      handleError(error, 'Failed to refresh invoices')
+    }
+  }, [handleError])
+
+  const fetchInvoiceDetail = useCallback(async (id: string) => {
+    try {
+      return await fetchInvoiceApi(id)
+    } catch (error) {
+      handleError(error, 'Failed to fetch invoice detail')
+      throw error
+    }
+  }, [handleError])
+
+  const addInvoiceFromQuote = useCallback(
+    async (quoteId: string) => {
+      try {
+        const created = await createInvoiceFromQuoteApi(quoteId, settings.vatRate)
+        setInvoices((prev) => [created, ...prev])
+        toast.success('Rechnung erstellt')
+        void refreshDashboard()
+        return created
+      } catch (error) {
+        handleError(error, 'Failed to create invoice')
+        throw error
+      }
+    },
+    [handleError, toast, refreshDashboard, settings.vatRate],
+  )
+
+  const updateInvoice = useCallback(
+    async (id: string, patch: Partial<Invoice>) => {
+      try {
+        const updated = await updateInvoiceApi(id, patch)
+        setInvoices((prev) => prev.map((inv) => (inv.id === id ? updated : inv)))
+        toast.success('Rechnung aktualisiert')
+        void refreshDashboard()
+      } catch (error) {
+        handleError(error, 'Failed to update invoice')
+        throw error
+      }
+    },
+    [handleError, toast, refreshDashboard],
+  )
+
+  const deleteInvoice = useCallback(
+    async (id: string) => {
+      try {
+        await deleteInvoiceApi(id)
+        setInvoices((prev) => prev.filter((inv) => inv.id !== id))
+        toast.success('Rechnung gelöscht')
+        void refreshDashboard()
+      } catch (error) {
+        handleError(error, 'Failed to delete invoice')
+        throw error
+      }
+    },
+    [handleError, toast, refreshDashboard],
+  )
 
   // ---- Quote operations ----
   const addQuote = useCallback(
@@ -529,11 +695,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [handleError, refreshDashboard])
 
   const createQuoteFromCart = useCallback(
-    async (title: string, customerId?: string) => {
+    async (title: string, customerId?: string, projectId?: string) => {
       try {
         const created = await createQuoteApi({
           title,
           customerId,
+          projectId,
           status: 'draft',
           discountValue: 0,
         })
@@ -685,6 +852,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
       updateItem,
       deleteItem,
       createQuoteFromCart,
+      projects,
+      isLoadingProjects,
+      addProject,
+      updateProject,
+      deleteProject,
+      refreshProjects,
+      fetchProjectQuotes: fetchProjectQuotesHandler,
+      invoices,
+      isLoadingInvoices,
+      addInvoiceFromQuote,
+      updateInvoice,
+      deleteInvoice,
+      refreshInvoices,
+      fetchInvoiceDetail,
       dashboard,
       isLoadingDashboard,
       refreshDashboard,
@@ -737,6 +918,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
       updateItem,
       deleteItem,
       createQuoteFromCart,
+      projects,
+      isLoadingProjects,
+      addProject,
+      updateProject,
+      deleteProject,
+      refreshProjects,
+      fetchProjectQuotesHandler,
+      invoices,
+      isLoadingInvoices,
+      addInvoiceFromQuote,
+      updateInvoice,
+      deleteInvoice,
+      refreshInvoices,
+      fetchInvoiceDetail,
       dashboard,
       isLoadingDashboard,
       refreshDashboard,

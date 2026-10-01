@@ -2,7 +2,10 @@ import { useState } from 'react'
 import { FileText } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { Modal } from './Modal'
+import { CustomerSelect } from './CustomerSelect'
+import { ProjectSelect } from './ProjectSelect'
 import { useApp } from '../hooks/useApp'
+import type { Customer, Project } from '../types'
 
 interface CreateQuoteFromCartModalProps {
   open: boolean
@@ -15,10 +18,11 @@ export function CreateQuoteFromCartModal({
   onClose,
   defaultTitle = 'Angebot',
 }: CreateQuoteFromCartModalProps) {
-  const { customers, createQuoteFromCart } = useApp()
+  const { createQuoteFromCart } = useApp()
   const navigate = useNavigate()
   const [title, setTitle] = useState(defaultTitle)
-  const [customerId, setCustomerId] = useState('')
+  const [customer, setCustomer] = useState<Customer | undefined>(undefined)
+  const [project, setProject] = useState<Project | undefined>(undefined)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const handleSubmit = async () => {
@@ -27,7 +31,8 @@ export function CreateQuoteFromCartModal({
     try {
       const quote = await createQuoteFromCart(
         title.trim(),
-        customerId || undefined,
+        customer?.id,
+        project?.id,
       )
       onClose()
       navigate(`/angebote?id=${quote.id}`)
@@ -78,31 +83,14 @@ export function CreateQuoteFromCartModal({
           <span className="text-2xs font-semibold uppercase tracking-wider text-ink-muted">
             Kunde (optional)
           </span>
-          <div className="relative">
-            <select
-              value={customerId}
-              onChange={(e) => setCustomerId(e.target.value)}
-              className="input w-full appearance-none pr-10"
-            >
-              <option value="">Kein Kunde / manuell später</option>
-              {customers.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                  {c.city ? ` · ${c.city}` : ''}
-                </option>
-              ))}
-            </select>
-            {/* Chevron placeholder — Modal-Select nutzt ChevronDown, hier reicht native Darstellung */}
-            <svg
-              className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              viewBox="0 0 24 24"
-            >
-              <path d="M6 9l6 6 6-6" />
-            </svg>
-          </div>
+          <CustomerSelect value={customer} onChange={setCustomer} />
+        </label>
+
+        <label className="flex flex-col gap-1.5">
+          <span className="text-2xs font-semibold uppercase tracking-wider text-ink-muted">
+            Projekt (optional)
+          </span>
+          <ProjectSelect value={project} onChange={setProject} customerId={customer?.id} />
         </label>
       </div>
     </Modal>

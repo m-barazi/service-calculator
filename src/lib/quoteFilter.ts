@@ -20,6 +20,8 @@ export function filterQuotes(quotes: Quote[], filter: QuoteFilter): Quote[] {
       quote.customer?.name,
       quote.customer?.email,
       quote.customer?.city,
+      quote.projectName,
+      quote.project?.name,
     ]
       .filter(Boolean)
       .join(' ')

@@ -82,3 +82,26 @@ const STATUS_LABELS: Record<string, string> = {
 export function formatQuoteStatus(status?: string): string {
   return status ? STATUS_LABELS[status] ?? status : ''
 }
+
+const PROJECT_STATUS_LABELS: Record<string, string> = {
+  active: 'Aktiv',
+  on_hold: 'Pausiert',
+  completed: 'Abgeschlossen',
+  cancelled: 'Storniert',
+}
+
+export function formatProjectStatus(status?: string): string {
+  return status ? PROJECT_STATUS_LABELS[status] ?? status : ''
+}
+
+const INVOICE_STATUS_LABELS: Record<string, string> = {
+  draft: 'Entwurf',
+  sent: 'Versendet',
+  paid: 'Bezahlt',
+  overdue: 'Überfällig',
+  cancelled: 'Storniert',
+}
+
+export function formatInvoiceStatus(status?: string): string {
+  return status ? INVOICE_STATUS_LABELS[status] ?? status : ''
+}

@@ -7,6 +7,7 @@ import {
   FileText,
   History,
   Plus,
+  Receipt,
   Trash2,
 } from 'lucide-react'
 import { useApp } from '../../hooks/useApp'
@@ -14,6 +15,7 @@ import { computeQuoteTotals } from '../../lib/quoteCalc'
 import { generateQuotePdf } from '../../lib/quotePdf'
 import { formatDateTime, formatEUR, formatPriceInput, formatQuoteStatus, parseGermanNumber } from '../../lib/format'
 import { CustomerSelect } from '../CustomerSelect'
+import { ProjectSelect } from '../ProjectSelect'
 import { ItemRow } from './ItemRow'
 import { TotalRow } from './TotalRow'
 import { AddItemModal } from './AddItemModal'
@@ -48,6 +50,7 @@ export function QuoteDetail({
     updateQuoteStatus,
     fetchQuoteDetail,
     fetchQuoteHistory,
+    addInvoiceFromQuote,
   } = useApp()
   const [addItemModalOpen, setAddItemModalOpen] = useState(false)
   const [itemSearch, setItemSearch] = useState('')
@@ -56,6 +59,7 @@ export function QuoteDetail({
   const [history, setHistory] = useState<QuoteStatusHistoryEntry[]>([])
   const [historyOpen, setHistoryOpen] = useState(false)
   const [isChangingStatus, setIsChangingStatus] = useState(false)
+  const [isCreatingInvoice, setIsCreatingInvoice] = useState(false)
 
   const statusInfo = STATUS_MAP[q.status] ?? STATUS_MAP.draft
 
@@ -166,6 +170,16 @@ export function QuoteDetail({
     },
     [q, totals, settings],
   )
+
+  const handleCreateInvoice = useCallback(async () => {
+    if (q.status !== 'accepted') return
+    setIsCreatingInvoice(true)
+    try {
+      await addInvoiceFromQuote(q.id)
+    } finally {
+      setIsCreatingInvoice(false)
+    }
+  }, [q.id, q.status, addInvoiceFromQuote])
 
   const filteredServices = useMemo(() => {
     const query = itemSearch.trim().toLowerCase()
@@ -299,6 +313,27 @@ export function QuoteDetail({
                     customer,
                   })
                 }}
+              />
+            </label>
+
+            {/* Project */}
+            <label className="block">
+              <span className="mb-1.5 block text-sm font-medium text-ink-soft">Projekt</span>
+              <ProjectSelect
+                value={q.project}
+                onChange={(project) => {
+                  handleQuoteChange({
+                    projectId: project?.id,
+                    projectName: project?.name,
+                  })
+                  onUpdate({
+                    ...q,
+                    projectId: project?.id,
+                    projectName: project?.name,
+                    project,
+                  })
+                }}
+                customerId={q.customerId}
               />
             </label>
 
@@ -486,6 +521,16 @@ export function QuoteDetail({
           <Download className="h-4 w-4" />
           PDF Intern
         </button>
+        {q.status === 'accepted' && (
+          <button
+            onClick={handleCreateInvoice}
+            className="btn-primary"
+            disabled={isCreatingInvoice}
+          >
+            <Receipt className="h-4 w-4" />
+            {isCreatingInvoice ? 'Rechnung wird erstellt...' : 'Rechnung erstellen'}
+          </button>
+        )}
         <button
           onClick={() => onDuplicate(q.id)}
           className="btn-secondary"

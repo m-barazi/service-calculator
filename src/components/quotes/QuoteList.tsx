@@ -1,4 +1,4 @@
-import { FileText, Plus, Search, X, Copy, Trash2 } from 'lucide-react'
+import { FileText, Plus, Search, X, Copy, Trash2, FolderKanban } from 'lucide-react'
 import { formatDate } from '../../lib/format'
 import { STATUS_MAP, STATUS_OPTIONS } from './status'
 import { FilterChip } from './FilterChip'
@@ -141,9 +141,16 @@ export function QuoteList({
                       {statusInfo.label}
                     </span>
                   </div>
-                  {quote.customerName && (
+                  {(quote.customerName || quote.projectName) && (
                     <p className="mt-1 text-sm text-ink-soft truncate">
-                      {quote.customerName}
+                      {quote.projectName ? (
+                        <span className="flex items-center gap-1.5">
+                          <FolderKanban className="h-3 w-3" />
+                          {quote.projectName}
+                        </span>
+                      ) : (
+                        quote.customerName
+                      )}
                     </p>
                   )}
                   <p className="mt-2 text-2xs text-ink-muted">

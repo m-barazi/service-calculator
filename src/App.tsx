@@ -8,6 +8,8 @@ import { CategoriesPage } from './pages/CategoriesPage'
 import { PriceListPage } from './pages/PriceListPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { SettingsPage } from './pages/SettingsPage'
+import { ProjectsPage } from './pages/ProjectsPage'
+import { InvoicesPage } from './pages/InvoicesPage'
 
 export default function App() {
   return (
@@ -18,6 +20,8 @@ export default function App() {
           <Route path="rechner" element={<CalculatorPage />} />
           <Route path="angebote" element={<AngebotePage />} />
           <Route path="kunden" element={<CustomersPage />} />
+          <Route path="projekte" element={<ProjectsPage />} />
+          <Route path="rechnungen" element={<InvoicesPage />} />
           <Route path="kategorien" element={<CategoriesPage />} />
           <Route path="preisliste" element={<PriceListPage />} />
           <Route path="dashboard" element={<Navigate to="/" replace />} />

@@ -114,6 +114,20 @@ export interface CartTotals {
 export type QuoteStatus = 'draft' | 'sent' | 'accepted' | 'rejected'
 export type DiscountType = 'percent' | 'amount'
 
+export type ProjectStatus = 'active' | 'completed' | 'on_hold' | 'cancelled'
+
+export interface Project {
+  id: string
+  name: string
+  customerId?: string
+  customerName?: string
+  customer?: Customer
+  description?: string
+  status: ProjectStatus
+  createdAt: string
+  updatedAt: string
+}
+
 export interface Customer {
   id: string
   name: string
@@ -135,6 +149,9 @@ export interface Quote {
   customerName?: string
   customerId?: string
   customer?: Customer
+  projectId?: string
+  projectName?: string
+  project?: Project
   status: QuoteStatus
   discountType?: DiscountType
   discountValue: number
@@ -185,6 +202,37 @@ export interface QuoteLineComputation {
   service?: Service
   lineNet: number
   lineGross: number
+}
+
+// ===== Invoice types =====
+
+export type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled'
+
+export interface Invoice {
+  id: string
+  invoiceNumber: string
+  quoteId?: string
+  quoteNumber?: string
+  quote?: Quote
+  projectId?: string
+  projectName?: string
+  project?: Project
+  customerId?: string
+  customerName?: string
+  customer?: Customer
+  title: string
+  status: InvoiceStatus
+  dueDate?: string
+  paidAt?: string
+  notes?: string
+  totalNet: number
+  totalGross: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface InvoiceWithItems extends Invoice {
+  items: QuoteItem[]
 }
 
 export interface DashboardData {
