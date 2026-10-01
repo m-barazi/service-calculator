@@ -1,6 +1,8 @@
-import { FileText, ReceiptText, Sparkles, Trash2 } from 'lucide-react'
+import { FileText, FolderOpen, ReceiptText, Sparkles, Trash2 } from 'lucide-react'
+import { useState } from 'react'
 import type { CartTotals } from '../types'
 import { formatEUR, formatPct } from '../lib/format'
+import { CartTemplatesModal } from './CartTemplatesModal'
 
 interface SummaryPanelProps {
   totals: CartTotals
@@ -10,6 +12,7 @@ interface SummaryPanelProps {
 }
 
 export function SummaryPanel({ totals, onShowDetails, onCreateQuote, onClear }: SummaryPanelProps) {
+  const [templatesOpen, setTemplatesOpen] = useState(false)
   const isEmpty = totals.lines.length === 0
 
   return (
@@ -99,6 +102,13 @@ export function SummaryPanel({ totals, onShowDetails, onCreateQuote, onClear }: 
           Angebot erstellen
         </button>
         <button
+          onClick={() => setTemplatesOpen(true)}
+          className="btn-secondary w-full"
+        >
+          <FolderOpen className="h-4 w-4" />
+          Vorlagen
+        </button>
+        <button
           onClick={onClear}
           disabled={isEmpty}
           className="btn-ghost w-full text-xs"
@@ -107,6 +117,8 @@ export function SummaryPanel({ totals, onShowDetails, onCreateQuote, onClear }: 
           Auswahl zurücksetzen
         </button>
       </div>
+
+      <CartTemplatesModal open={templatesOpen} onClose={() => setTemplatesOpen(false)} />
 
       {/* Empty hint */}
       {isEmpty && (

@@ -1,8 +1,9 @@
-import type { Category, Service, Settings } from '../types'
+import type { CartItem, Category, Service, Settings } from '../types'
 
 const KEYS = {
   settings: 'sc.settings.v1',
   cart: 'sc.cart.v1',
+  templates: 'sc.templates.v1',
 } as const
 
 const DEFAULT_SETTINGS: Settings = {
@@ -65,6 +66,39 @@ export function saveCart(cart: Record<string, { quantity: number; note: string }
   } catch {
     /* no-op */
   }
+}
+
+// ===== Cart templates =====
+
+export interface CartTemplate {
+  id: string
+  name: string
+  items: CartItem[]
+  createdAt: string
+  updatedAt: string
+}
+
+export function loadTemplates(): CartTemplate[] {
+  try {
+    const raw = localStorage.getItem(KEYS.templates)
+    if (!raw) return []
+    const parsed = JSON.parse(raw) as CartTemplate[]
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+export function saveTemplates(templates: CartTemplate[]): void {
+  try {
+    localStorage.setItem(KEYS.templates, JSON.stringify(templates))
+  } catch (e) {
+    console.error('Failed to save templates', e)
+  }
+}
+
+export function newTemplateId(): string {
+  return `tpl_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`
 }
 
 // ===== Export / Import (backup via API) =====

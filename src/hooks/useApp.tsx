@@ -7,12 +7,15 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import type { Service, Settings, Category, Customer, Quote, QuoteWithItems, QuoteItem, DashboardData } from '../types'
+import type { Service, Settings, Category, Customer, Quote, QuoteWithItems, QuoteItem, DashboardData, CartTemplate, CartItem } from '../types'
 import {
   loadCart,
   loadSettings,
   saveCart,
   saveSettings,
+  loadTemplates,
+  saveTemplates,
+  newTemplateId,
 } from '../lib/storage'
 import { buildCartQuoteItems } from '../lib/cartQuote'
 import {
@@ -58,6 +61,12 @@ interface AppState {
   clearCart: () => void
   cartItemCount: number
   cartLineCount: number
+
+  // Cart templates
+  cartTemplates: CartTemplate[]
+  saveCartTemplate: (name: string) => void
+  loadCartTemplate: (id: string, mode: 'replace' | 'merge') => void
+  deleteCartTemplate: (id: string) => void
 
   // Settings
   settings: Settings
@@ -114,6 +123,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [dashboard, setDashboard] = useState<DashboardData | null>(null)
   const [isLoadingDashboard, setIsLoadingDashboard] = useState(true)
   const [cart, setCart] = useState<Record<string, { quantity: number; note: string }>>(() => loadCart())
+  const [cartTemplates, setCartTemplates] = useState<CartTemplate[]>(() => loadTemplates())
   const [settings, setSettings] = useState<Settings>(() => loadSettings())
 
   // Apply theme
@@ -153,6 +163,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     saveCart(cart)
   }, [cart])
+
+  useEffect(() => {
+    saveTemplates(cartTemplates)
+  }, [cartTemplates])
 
   useEffect(() => {
     saveSettings(settings)
@@ -504,6 +518,53 @@ export function AppProvider({ children }: { children: ReactNode }) {
   )
   const cartLineCount = useMemo(() => Object.keys(cart).length, [cart])
 
+  // ---- Cart template operations ----
+  const saveCartTemplate = useCallback((name: string) => {
+    const trimmed = name.trim()
+    if (!trimmed) return
+    const items: CartItem[] = Object.entries(cart).map(([serviceId, entry]) => ({
+      serviceId,
+      quantity: entry.quantity,
+      note: entry.note,
+    }))
+    const now = new Date().toISOString()
+    const template: CartTemplate = {
+      id: newTemplateId(),
+      name: trimmed,
+      items,
+      createdAt: now,
+      updatedAt: now,
+    }
+    setCartTemplates((prev) => [...prev, template].sort((a, b) => a.name.localeCompare(b.name)))
+    toast.success('Warenkorb-Vorlage gespeichert')
+  }, [cart, toast])
+
+  const loadCartTemplate = useCallback((id: string, mode: 'replace' | 'merge') => {
+    const template = cartTemplates.find((t) => t.id === id)
+    if (!template) return
+    const activeIds = new Set(services.map((s) => s.id))
+    const validItems = template.items.filter((i) => activeIds.has(i.serviceId))
+    if (validItems.length === 0) {
+      toast.error('Vorlage enthält keine gültigen Leistungen mehr')
+      return
+    }
+    const next: Record<string, { quantity: number; note: string }> =
+      mode === 'replace' ? {} : { ...cart }
+    for (const item of validItems) {
+      next[item.serviceId] = {
+        quantity: Math.max(1, item.quantity),
+        note: item.note ?? '',
+      }
+    }
+    setCart(next)
+    toast.success(mode === 'replace' ? 'Vorlage geladen' : 'Vorlage zum Warenkorb hinzugefügt')
+  }, [cartTemplates, services, cart, toast])
+
+  const deleteCartTemplate = useCallback((id: string) => {
+    setCartTemplates((prev) => prev.filter((t) => t.id !== id))
+    toast.success('Vorlage gelöscht')
+  }, [toast])
+
   const value = useMemo<AppState>(
     () => ({
       services,
@@ -518,6 +579,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       clearCart,
       cartItemCount,
       cartLineCount,
+      cartTemplates,
+      saveCartTemplate,
+      loadCartTemplate,
+      deleteCartTemplate,
       settings,
       updateSettings,
       categories,
@@ -563,6 +628,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       updateSettings,
       cartItemCount,
       cartLineCount,
+      cartTemplates,
+      saveCartTemplate,
+      loadCartTemplate,
+      deleteCartTemplate,
       categories,
       isLoadingCategories,
       addCategory,

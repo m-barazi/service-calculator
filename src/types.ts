@@ -70,6 +70,14 @@ export interface LineComputation {
   profitMarginPct: number
 }
 
+export interface CartTemplate {
+  id: string
+  name: string
+  items: CartItem[]
+  createdAt: string
+  updatedAt: string
+}
+
 export interface CartTotals {
   lines: LineComputation[]
   totalCostNet: number
