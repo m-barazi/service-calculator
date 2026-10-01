@@ -29,6 +29,8 @@ export function computeCart(
   cart: CartItem[],
   services: Service[],
   vatRate: number,
+  discountType?: import('../types').CartDiscountType,
+  discountValue: number = 0,
 ): CartTotals {
   const serviceMap = new Map(services.map((s) => [s.id, s]))
   const lines: LineComputation[] = []
@@ -47,9 +49,21 @@ export function computeCart(
   const totalCostGross = lines.reduce((s, l) => s + l.totalCostGross, 0)
   const totalSaleNet = lines.reduce((s, l) => s + l.totalSaleNet, 0)
   const totalSaleGross = lines.reduce((s, l) => s + l.totalSaleGross, 0)
-  const profitNet = totalSaleNet - totalCostNet
-  const profitMarginPct = totalSaleNet > 0 ? profitNet / totalSaleNet : 0
   const itemCount = lines.reduce((s, l) => s + l.quantity, 0)
+
+  let discountAmount = 0
+  if (discountType === 'percent') {
+    discountAmount = totalSaleNet * (discountValue / 100)
+  } else if (discountType === 'amount') {
+    discountAmount = discountValue
+  }
+  discountAmount = Math.min(discountAmount, totalSaleNet)
+  discountAmount = Math.max(0, discountAmount)
+
+  const discountedSaleNet = Math.max(0, totalSaleNet - discountAmount)
+  const discountedSaleGross = discountedSaleNet * (1 + vatRate)
+  const profitNet = discountedSaleNet - totalCostNet
+  const profitMarginPct = discountedSaleNet > 0 ? profitNet / discountedSaleNet : 0
 
   return {
     lines,
@@ -61,5 +75,10 @@ export function computeCart(
     profitMarginPct,
     itemCount,
     vatRate,
+    discountType,
+    discountValue,
+    discountAmount,
+    discountedSaleNet,
+    discountedSaleGross,
   }
 }

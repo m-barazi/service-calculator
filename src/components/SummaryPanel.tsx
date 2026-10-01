@@ -1,7 +1,7 @@
-import { FileText, FolderOpen, ReceiptText, Sparkles, Trash2 } from 'lucide-react'
+import { FileText, FolderOpen, ReceiptText, Sparkles, Tag, Trash2 } from 'lucide-react'
 import { useState } from 'react'
-import type { CartTotals } from '../types'
-import { formatEUR, formatPct } from '../lib/format'
+import type { CartDiscountType, CartTotals } from '../types'
+import { formatEUR, formatPct, formatPriceInput, parseGermanNumber } from '../lib/format'
 import { CartTemplatesModal } from './CartTemplatesModal'
 
 interface SummaryPanelProps {
@@ -9,9 +9,22 @@ interface SummaryPanelProps {
   onShowDetails: () => void
   onCreateQuote: () => void
   onClear: () => void
+  discountType?: CartDiscountType
+  discountValue: number
+  onDiscountTypeChange: (type?: CartDiscountType) => void
+  onDiscountValueChange: (value: number) => void
 }
 
-export function SummaryPanel({ totals, onShowDetails, onCreateQuote, onClear }: SummaryPanelProps) {
+export function SummaryPanel({
+  totals,
+  onShowDetails,
+  onCreateQuote,
+  onClear,
+  discountType,
+  discountValue,
+  onDiscountTypeChange,
+  onDiscountValueChange,
+}: SummaryPanelProps) {
   const [templatesOpen, setTemplatesOpen] = useState(false)
   const isEmpty = totals.lines.length === 0
 
@@ -38,11 +51,18 @@ export function SummaryPanel({ totals, onShowDetails, onCreateQuote, onClear }: 
       <div className="flex flex-col gap-1 px-5 py-5">
         <p className="eyebrow">Verkaufspreis Brutto</p>
         <p className="display-num text-[44px] font-bold leading-none tracking-tightest text-ink">
-          {formatEUR(totals.totalSaleGross)}
+          {formatEUR(totals.discountedSaleGross)}
         </p>
-        <p className="num mt-2 text-sm text-ink-muted">
-          {formatEUR(totals.totalSaleNet)} netto
-        </p>
+        {totals.discountAmount > 0 && (
+          <p className="num mt-1 text-sm text-accent-strong">
+            Rabatt: {formatEUR(-totals.discountAmount)} · vorher {formatEUR(totals.totalSaleNet)} netto
+          </p>
+        )}
+        {totals.discountAmount === 0 && (
+          <p className="num mt-2 text-sm text-ink-muted">
+            {formatEUR(totals.totalSaleNet)} netto
+          </p>
+        )}
       </div>
 
       {/* Stats grid */}
@@ -82,6 +102,53 @@ export function SummaryPanel({ totals, onShowDetails, onCreateQuote, onClear }: 
           )}
         </div>
       </div>
+
+      {/* Discount */}
+      {!isEmpty && (
+        <div className="border-t border-border px-5 py-4">
+          <div className="mb-2 flex items-center gap-2">
+            <Tag className="h-3.5 w-3.5 text-ink-muted" />
+            <span className="text-2xs font-semibold uppercase tracking-wider text-ink-muted">
+              Rabatt
+            </span>
+          </div>
+          <div className="flex gap-2">
+            {(
+              [
+                { value: undefined as CartDiscountType | undefined, label: 'Kein' },
+                { value: 'percent' as const, label: '%' },
+                { value: 'amount' as const, label: '€' },
+              ] as const
+            ).map((opt) => (
+              <button
+                key={opt.label}
+                type="button"
+                onClick={() =>
+                  onDiscountTypeChange(opt.value)}
+                className={[
+                  'rounded-lg border px-3 py-1.5 text-sm font-medium transition',
+                  (opt.value === undefined && !discountType) ||
+                  (opt.value !== undefined && discountType === opt.value)
+                    ? 'border-accent bg-accent/10 text-accent'
+                    : 'border-border text-ink-soft hover:border-ink-faint hover:text-ink',
+                ].join(' ')}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          {discountType && (
+            <input
+              type="text"
+              inputMode="decimal"
+              value={discountValue === 0 ? '' : formatPriceInput(discountValue)}
+              onChange={(e) => onDiscountValueChange(parseGermanNumber(e.target.value))}
+              className="input mt-2 w-full"
+              placeholder={discountType === 'percent' ? 'Rabatt in %' : 'Rabatt in €'}
+            />
+          )}
+        </div>
+      )}
 
       {/* Actions */}
       <div className="flex flex-col gap-2 border-t border-border p-4">

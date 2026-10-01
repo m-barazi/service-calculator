@@ -124,4 +124,59 @@ describe('computeCart', () => {
     expect(totals.profitNet).toBe(75)
     expect(totals.profitMarginPct).toBe(0.75)
   })
+
+  it('applies no discount by default', () => {
+    const services = [makeService({ id: 'a', salePrice: 100 })]
+    const cart: CartItem[] = [{ serviceId: 'a', quantity: 1, note: '' }]
+
+    const totals = computeCart(cart, services, VAT)
+
+    expect(totals.discountAmount).toBe(0)
+    expect(totals.discountedSaleNet).toBe(100)
+    expect(totals.discountedSaleGross).toBe(119)
+  })
+
+  it('applies percentage discount on cart', () => {
+    const services = [makeService({ id: 'a', salePrice: 100 })]
+    const cart: CartItem[] = [{ serviceId: 'a', quantity: 1, note: '' }]
+
+    const totals = computeCart(cart, services, VAT, 'percent', 10)
+
+    expect(totals.discountAmount).toBe(10)
+    expect(totals.discountedSaleNet).toBe(90)
+    expect(totals.discountedSaleGross).toBeCloseTo(107.1, 1)
+    expect(totals.profitNet).toBe(80)
+  })
+
+  it('applies fixed amount discount on cart', () => {
+    const services = [makeService({ id: 'a', purchasePrice: 50, salePrice: 200 })]
+    const cart: CartItem[] = [{ serviceId: 'a', quantity: 1, note: '' }]
+
+    const totals = computeCart(cart, services, VAT, 'amount', 30)
+
+    expect(totals.discountAmount).toBe(30)
+    expect(totals.discountedSaleNet).toBe(170)
+    expect(totals.profitNet).toBe(120)
+  })
+
+  it('does not let discount exceed subtotal', () => {
+    const services = [makeService({ id: 'a', salePrice: 100 })]
+    const cart: CartItem[] = [{ serviceId: 'a', quantity: 1, note: '' }]
+
+    const totals = computeCart(cart, services, VAT, 'amount', 500)
+
+    expect(totals.discountAmount).toBe(100)
+    expect(totals.discountedSaleNet).toBe(0)
+    expect(totals.profitNet).toBe(-10)
+  })
+
+  it('caps percentage discount at subtotal', () => {
+    const services = [makeService({ id: 'a', salePrice: 100 })]
+    const cart: CartItem[] = [{ serviceId: 'a', quantity: 1, note: '' }]
+
+    const totals = computeCart(cart, services, VAT, 'percent', 150)
+
+    expect(totals.discountAmount).toBe(100)
+    expect(totals.discountedSaleNet).toBe(0)
+  })
 })

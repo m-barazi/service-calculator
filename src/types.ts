@@ -78,6 +78,8 @@ export interface CartTemplate {
   updatedAt: string
 }
 
+export type CartDiscountType = 'percent' | 'amount'
+
 export interface CartTotals {
   lines: LineComputation[]
   totalCostNet: number
@@ -88,6 +90,11 @@ export interface CartTotals {
   profitMarginPct: number
   itemCount: number
   vatRate: number
+  discountType?: CartDiscountType
+  discountValue: number
+  discountAmount: number
+  discountedSaleNet: number
+  discountedSaleGross: number
 }
 
 // ===== Quote types =====

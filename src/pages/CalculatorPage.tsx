@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Eye, EyeOff, Search, X } from 'lucide-react'
+import type { CartDiscountType } from '../types'
 import { useApp } from '../hooks/useApp'
 import { computeCart } from '../lib/calc'
 import { ServiceRow } from '../components/ServiceRow'
@@ -25,6 +26,8 @@ export function CalculatorPage() {
   const [showPrices, setShowPrices] = useState(true)
   const [detailsOpen, setDetailsOpen] = useState(false)
   const [createQuoteOpen, setCreateQuoteOpen] = useState(false)
+  const [cartDiscountType, setCartDiscountType] = useState<CartDiscountType | undefined>(undefined)
+  const [cartDiscountValue, setCartDiscountValue] = useState(0)
 
   // Visible services first, then by category
   const visibleServices = useMemo(
@@ -76,8 +79,8 @@ export function CalculatorPage() {
     [cart],
   )
   const totals = useMemo(
-    () => computeCart(cartItems, services, settings.vatRate),
-    [cartItems, services, settings.vatRate],
+    () => computeCart(cartItems, services, settings.vatRate, cartDiscountType, cartDiscountValue),
+    [cartItems, services, settings.vatRate, cartDiscountType, cartDiscountValue],
   )
 
   return (
@@ -244,6 +247,10 @@ export function CalculatorPage() {
             onShowDetails={() => setDetailsOpen(true)}
             onCreateQuote={() => setCreateQuoteOpen(true)}
             onClear={clearCart}
+            discountType={cartDiscountType}
+            discountValue={cartDiscountValue}
+            onDiscountTypeChange={setCartDiscountType}
+            onDiscountValueChange={setCartDiscountValue}
           />
         </div>
       </div>

@@ -203,11 +203,12 @@ export function generatePdfReport(
   // Subtle background for totals
   doc.setFillColor(SOFT_BG[0], SOFT_BG[1], SOFT_BG[2])
   doc.setDrawColor(BORDER[0], BORDER[1], BORDER[2])
+  const boxExtraH = totals.discountAmount > 0 ? 18 : 0
   doc.roundedRect(
     boxX,
     boxY,
     boxW,
-    opts.showProfit ? 168 : 96,
+    opts.showProfit ? 168 + boxExtraH : 96 + boxExtraH,
     10,
     10,
     'FD',
@@ -218,14 +219,22 @@ export function generatePdfReport(
     `Zwischensumme (Netto)`,
     formatEUR(totals.totalSaleNet),
   )
+  if (totals.discountAmount > 0) {
+    drawTotalRow(
+      totals.discountType === 'percent'
+        ? `Rabatt (-${totals.discountValue}%)`
+        : 'Rabatt',
+      formatEUR(-totals.discountAmount),
+    )
+  }
   drawTotalRow(
     `MwSt (${(totals.vatRate * 100).toFixed(0).replace('.', ',')}%)`,
-    formatEUR(totals.totalSaleGross - totals.totalSaleNet),
+    formatEUR(totals.discountedSaleGross - totals.discountedSaleNet),
   )
   // Divider line in box
   doc.setDrawColor(BORDER[0], BORDER[1], BORDER[2])
   doc.line(boxX + 14, boxY - 6, boxX + boxW - 14, boxY - 6)
-  drawTotalRow('Gesamt (Brutto)', formatEUR(totals.totalSaleGross), {
+  drawTotalRow('Gesamt (Brutto)', formatEUR(totals.discountedSaleGross), {
     strong: true,
   })
 

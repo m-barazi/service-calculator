@@ -226,17 +226,24 @@ export function DetailsModal({
             </div>
             <div className="space-y-2 px-5 py-4">
               <Row label="Netto" value={formatEUR(totals.totalSaleNet)} />
+              {totals.discountAmount > 0 && (
+                <Row
+                  label={totals.discountType === 'percent' ? `Rabatt (-${totals.discountValue}%)` : 'Rabatt'}
+                  value={formatEUR(-totals.discountAmount)}
+                  muted
+                />
+              )}
               <Row
                 label={`MwSt ${(totals.vatRate * 100).toFixed(0).replace('.', ',')}%`}
                 value={formatEUR(
-                  totals.totalSaleGross - totals.totalSaleNet,
+                  totals.discountedSaleGross - totals.discountedSaleNet,
                 )}
                 muted
               />
               <div className="my-2 border-t border-dashed border-border" />
               <Row
                 label="Brutto"
-                value={formatEUR(totals.totalSaleGross)}
+                value={formatEUR(totals.discountedSaleGross)}
                 strong
               />
             </div>
