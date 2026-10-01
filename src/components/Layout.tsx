@@ -1,20 +1,42 @@
-import { NavLink, Outlet } from 'react-router-dom'
-import { Calculator, FileText, LayoutDashboard, Receipt, Settings as SettingsIcon, Sun, Moon, Monitor, Tags, Users } from 'lucide-react'
+import { useState } from 'react'
+import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import {
+  Calculator,
+  FileText,
+  LayoutDashboard,
+  Menu,
+  Receipt,
+  Settings as SettingsIcon,
+  Sun,
+  Moon,
+  Monitor,
+  Tags,
+  Users,
+  X,
+} from 'lucide-react'
 import { Logo } from './Logo'
 import { useApp } from '../hooks/useApp'
 
 const NAV = [
-  { to: '/', icon: Calculator, label: 'Rechner', end: true },
-  { to: '/angebote', icon: FileText, label: 'Angebote' },
-  { to: '/kunden', icon: Users, label: 'Kunden' },
-  { to: '/kategorien', icon: Tags, label: 'Kategorien' },
-  { to: '/preisliste', icon: Receipt, label: 'Preisliste' },
-  { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/einstellungen', icon: SettingsIcon, label: 'Einstellungen' },
+  { to: '/', icon: Calculator, label: 'Rechner', end: true, group: 'primary' as const },
+  { to: '/angebote', icon: FileText, label: 'Angebote', group: 'primary' as const },
+  { to: '/kunden', icon: Users, label: 'Kunden', group: 'primary' as const },
+  { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', group: 'primary' as const },
+  { to: '/kategorien', icon: Tags, label: 'Kategorien', group: 'more' as const },
+  { to: '/preisliste', icon: Receipt, label: 'Preisliste', group: 'more' as const },
+  { to: '/einstellungen', icon: SettingsIcon, label: 'Einstellungen', group: 'more' as const },
 ]
+
+const PRIMARY_NAV = NAV.filter((n) => n.group === 'primary')
+const MORE_NAV = NAV.filter((n) => n.group === 'more')
 
 export function Layout() {
   const { settings, updateSettings, cartLineCount } = useApp()
+  const [moreOpen, setMoreOpen] = useState(false)
+  const location = useLocation()
+  const activeMore = MORE_NAV.some((n) =>
+    n.end ? location.pathname === n.to : location.pathname.startsWith(n.to),
+  )
 
   return (
     <div className="relative z-10 flex min-h-screen flex-col md:flex-row">
@@ -135,8 +157,8 @@ export function Layout() {
       </main>
 
       {/* ─── Mobile bottom nav ──────────────────────────── */}
-      <nav className="fixed bottom-0 left-0 right-0 z-30 grid grid-cols-7 border-t border-border bg-canvas/90 backdrop-blur-xl pb-safe md:hidden">
-        {NAV.map(({ to, icon: Icon, label, end }) => (
+      <nav className="fixed bottom-0 left-0 right-0 z-30 grid grid-cols-5 border-t border-border bg-canvas/90 backdrop-blur-xl pb-safe md:hidden">
+        {PRIMARY_NAV.map(({ to, icon: Icon, label, end }) => (
           <NavLink
             key={to}
             to={to}
@@ -159,7 +181,69 @@ export function Layout() {
             )}
           </NavLink>
         ))}
+        <button
+          onClick={() => setMoreOpen(true)}
+          className={[
+            'relative flex flex-col items-center justify-center gap-1 py-3 text-2xs font-medium transition-colors',
+            activeMore ? 'text-ink' : 'text-ink-muted',
+          ].join(' ')}
+          aria-label="Mehr"
+        >
+          <Menu className="h-5 w-5" strokeWidth={activeMore ? 2.2 : 1.8} />
+          <span>Mehr</span>
+          {activeMore && (
+            <span className="absolute top-0 left-1/2 h-[3px] w-8 -translate-x-1/2 rounded-b-full bg-accent" />
+          )}
+        </button>
       </nav>
+
+      {/* ─── Mobile "Mehr" sheet ────────────────────────── */}
+      {moreOpen && (
+        <div className="fixed inset-0 z-40 md:hidden">
+          <div
+            className="absolute inset-0 bg-canvas/60 backdrop-blur-md"
+            onClick={() => setMoreOpen(false)}
+            aria-hidden
+          />
+          <div className="absolute bottom-0 left-0 right-0 animate-slide-up rounded-t-3xl border-t border-border bg-elevated p-4 pb-safe shadow-elevated">
+            <div className="mb-4 flex items-center justify-between">
+              <span className="text-sm font-semibold text-ink">Mehr</span>
+              <button
+                onClick={() => setMoreOpen(false)}
+                className="qty-btn"
+                aria-label="Schließen"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              {MORE_NAV.map(({ to, icon: Icon, label, end }) => (
+                <NavLink
+                  key={to}
+                  to={to}
+                  end={end}
+                  onClick={() => setMoreOpen(false)}
+                  className={({ isActive }) =>
+                    [
+                      'flex flex-col items-center gap-2 rounded-xl border p-4 text-xs font-medium transition-all',
+                      isActive
+                        ? 'border-accent bg-accent/10 text-ink'
+                        : 'border-border bg-surface text-ink-soft hover:border-border-strong hover:text-ink',
+                    ].join(' ')
+                  }
+                >
+                  {({ isActive }) => (
+                    <>
+                      <Icon className="h-5 w-5" strokeWidth={isActive ? 2.2 : 1.8} />
+                      <span>{label}</span>
+                    </>
+                  )}
+                </NavLink>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
