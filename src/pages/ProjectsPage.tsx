@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, ArrowRight, FileText, FolderKanban, Pencil, Plus, Search, Trash2 } from 'lucide-react'
 import { useApp } from '../hooks/useApp'
 import { usePagedList } from '../hooks/usePagedList'
@@ -37,6 +37,7 @@ export function ProjectsPage() {
     refresh,
   } = usePagedList<Project>({ fetchPage: fetchProjectsPage, limit: PAGE_SIZE })
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [search, setSearch] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
   const [editingProject, setEditingProject] = useState<Project | undefined>()
@@ -45,6 +46,17 @@ export function ProjectsPage() {
   const [selectedProject, setSelectedProject] = useState<Project | null>(null)
   const [projectQuotes, setProjectQuotes] = useState<Quote[]>([])
   const [isLoadingQuotes, setIsLoadingQuotes] = useState(false)
+
+  // Open project detail from URL query param once projects are loaded
+  useEffect(() => {
+    const id = searchParams.get('id')
+    if (!id || isLoadingProjects) return
+    const project = projects.find((p) => p.id === id)
+    if (!project) return
+    openProjectDetail(project)
+    setSearchParams({}, { replace: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, isLoadingProjects, projects])
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()

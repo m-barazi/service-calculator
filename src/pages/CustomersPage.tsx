@@ -1,10 +1,12 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Mail, MapPin, Pencil, Phone, Plus, Search, Trash2, User } from 'lucide-react'
 import { useApp } from '../hooks/useApp'
 import { usePagedList } from '../hooks/usePagedList'
 import { fetchCustomersPage } from '../lib/api'
 import type { Customer } from '../types'
 import { CustomerFormModal } from '../components/CustomerFormModal'
+import { CustomerDetail } from '../components/CustomerDetail'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { Pagination } from '../components/Pagination'
 
@@ -16,11 +18,24 @@ export function CustomersPage() {
     fetchPage: fetchCustomersPage,
     limit: PAGE_SIZE,
   })
+  const [searchParams, setSearchParams] = useSearchParams()
   const [search, setSearch] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
   const [editingCustomer, setEditingCustomer] = useState<Customer | undefined>()
   const [confirmDelete, setConfirmDelete] = useState<Customer | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
+
+  // Open customer detail from URL query param once customers are loaded
+  useEffect(() => {
+    const id = searchParams.get('id')
+    if (!id || isLoading) return
+    const customer = customers.find((c) => c.id === id)
+    if (!customer) return
+    setSelectedCustomer(customer)
+    setSearchParams({}, { replace: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, isLoading, customers])
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -49,16 +64,38 @@ export function CustomersPage() {
     refresh()
   }
 
+  const openCustomer = (customer: Customer) => {
+    setSelectedCustomer(customer)
+  }
+
+  const closeCustomer = () => {
+    setSelectedCustomer(null)
+  }
+
   const handleDelete = async () => {
     if (!confirmDelete) return
     setIsDeleting(true)
     try {
       await deleteCustomer(confirmDelete.id)
+      if (selectedCustomer?.id === confirmDelete.id) {
+        setSelectedCustomer(null)
+      }
       await refresh()
     } finally {
       setIsDeleting(false)
       setConfirmDelete(null)
     }
+  }
+
+  if (selectedCustomer) {
+    return (
+      <CustomerDetail
+        customer={selectedCustomer}
+        onBack={closeCustomer}
+        onEdit={() => openEdit(selectedCustomer)}
+        onDelete={() => setConfirmDelete(selectedCustomer)}
+      />
+    )
   }
 
   if (isLoading && customers.length === 0) {
@@ -136,6 +173,7 @@ export function CustomersPage() {
               customer={customer}
               onEdit={() => openEdit(customer)}
               onDelete={() => setConfirmDelete(customer)}
+              onOpen={() => openCustomer(customer)}
             />
           ))}
         </div>
@@ -163,16 +201,18 @@ function CustomerCard({
   customer,
   onEdit,
   onDelete,
+  onOpen,
 }: {
   customer: Customer
   onEdit: () => void
   onDelete: () => void
+  onOpen: () => void
 }) {
   return (
-    <div className="card flex flex-col gap-4 p-5">
+    <div className="card group flex flex-col gap-4 p-5 transition hover:border-border-strong">
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <h3 className="font-semibold text-ink truncate">{customer.name}</h3>
+        <button onClick={onOpen} className="min-w-0 flex-1 text-left">
+          <h3 className="font-semibold text-ink truncate group-hover:text-accent transition">{customer.name}</h3>
           {(customer.street || customer.city || customer.zip) && (
             <p className="mt-1 flex items-start gap-1.5 text-sm text-ink-soft">
               <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" />
@@ -183,7 +223,7 @@ function CustomerCard({
               </span>
             </p>
           )}
-        </div>
+        </button>
         <div className="flex shrink-0 gap-1">
           <button onClick={onEdit} className="qty-btn" title="Bearbeiten">
             <Pencil className="h-3.5 w-3.5" />
