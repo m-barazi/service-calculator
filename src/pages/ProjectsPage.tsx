@@ -2,8 +2,11 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { ArrowLeft, ArrowRight, FileText, FolderKanban, Pencil, Plus, Search, Trash2 } from 'lucide-react'
 import { useApp } from '../hooks/useApp'
+import { usePagedList } from '../hooks/usePagedList'
+import { fetchProjectsPage } from '../lib/api'
 import type { Project, ProjectStatus, Quote } from '../types'
 import { ConfirmDialog } from '../components/ConfirmDialog'
+import { Pagination } from '../components/Pagination'
 import { formatDate } from '../lib/format'
 
 const STATUS_META: Record<
@@ -16,16 +19,23 @@ const STATUS_META: Record<
   cancelled: { label: 'Storniert', cls: 'bg-red-100 text-red-700' },
 }
 
+const PAGE_SIZE = 12
+
 export function ProjectsPage() {
   const {
-    projects,
-    isLoadingProjects,
     customers,
     deleteProject,
     addProject,
     updateProject,
     fetchProjectQuotes,
   } = useApp()
+  const {
+    data: projects,
+    pagination,
+    isLoading: isLoadingProjects,
+    loadPage,
+    refresh,
+  } = usePagedList<Project>({ fetchPage: fetchProjectsPage, limit: PAGE_SIZE })
   const navigate = useNavigate()
   const [search, setSearch] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
@@ -60,6 +70,7 @@ export function ProjectsPage() {
   const closeModal = () => {
     setModalOpen(false)
     setEditingProject(undefined)
+    refresh()
   }
 
   const handleDelete = async () => {
@@ -71,6 +82,7 @@ export function ProjectsPage() {
         setSelectedProject(null)
         setProjectQuotes([])
       }
+      await refresh()
     } finally {
       setIsDeleting(false)
       setConfirmDelete(null)
@@ -170,18 +182,23 @@ export function ProjectsPage() {
           </p>
         </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((project) => (
-            <ProjectCard
-              key={project.id}
-              project={project}
-              customers={customers}
-              onEdit={() => openEdit(project)}
-              onDelete={() => setConfirmDelete(project)}
-              onOpen={() => openProjectDetail(project)}
-            />
-          ))}
-        </div>
+        <>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {filtered.map((project) => (
+              <ProjectCard
+                key={project.id}
+                project={project}
+                customers={customers}
+                onEdit={() => openEdit(project)}
+                onDelete={() => setConfirmDelete(project)}
+                onOpen={() => openProjectDetail(project)}
+              />
+            ))}
+          </div>
+          <div className="mt-6">
+            <Pagination pagination={pagination} onPageChange={loadPage} />
+          </div>
+        </>
       )}
 
       <ProjectFormModal
