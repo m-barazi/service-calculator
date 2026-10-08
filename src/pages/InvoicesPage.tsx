@@ -12,11 +12,14 @@ import {
   X,
 } from 'lucide-react'
 import { useApp } from '../hooks/useApp'
+import { usePagedList } from '../hooks/usePagedList'
+import { fetchInvoicesPage } from '../lib/api'
 import { computeQuoteTotals } from '../lib/quoteCalc'
 import { generateInvoicePdf } from '../lib/invoicePdf'
 import { formatDate, formatEUR, formatInvoiceStatus } from '../lib/format'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { FilterChip } from '../components/quotes/FilterChip'
+import { Pagination } from '../components/Pagination'
 import type { Invoice, InvoiceStatus, InvoiceWithItems } from '../types'
 
 const STATUS_OPTIONS: { value: InvoiceStatus; label: string }[] = [
@@ -60,16 +63,23 @@ function filterInvoices(
   })
 }
 
+const PAGE_SIZE = 12
+
 export function InvoicesPage() {
   const {
-    invoices,
-    isLoadingInvoices,
     settings,
-    refreshInvoices,
     fetchInvoiceDetail,
     updateInvoice,
     deleteInvoice,
   } = useApp()
+
+  const {
+    data: invoices,
+    pagination,
+    isLoading: isLoadingInvoices,
+    loadPage,
+    refresh,
+  } = usePagedList<Invoice>({ fetchPage: fetchInvoicesPage, limit: PAGE_SIZE })
 
   const [searchParams, setSearchParams] = useSearchParams()
   const [selectedInvoice, setSelectedInvoice] = useState<InvoiceWithItems | null>(null)
@@ -122,12 +132,12 @@ export function InvoicesPage() {
     try {
       await deleteInvoice(confirmDelete.id)
       setSelectedInvoice(null)
-      await refreshInvoices()
+      await refresh()
     } finally {
       setIsDeleting(false)
       setConfirmDelete(null)
     }
-  }, [confirmDelete, deleteInvoice, refreshInvoices])
+  }, [confirmDelete, deleteInvoice, refresh])
 
   const handlePdf = useCallback(
     (invoice: InvoiceWithItems) => {
@@ -468,6 +478,8 @@ export function InvoicesPage() {
           })}
         </div>
       )}
+
+      <Pagination pagination={pagination} onPageChange={loadPage} />
     </div>
   )
 }

@@ -1,22 +1,32 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useApp } from '../hooks/useApp'
+import { usePagedList } from '../hooks/usePagedList'
+import { fetchQuotesPage } from '../lib/api'
 import { filterQuotes } from '../lib/quoteFilter'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { QuoteList } from '../components/quotes/QuoteList'
 import { QuoteDetail } from '../components/quotes/QuoteDetail'
+import { Pagination } from '../components/Pagination'
 import type { Quote, QuoteStatus, QuoteWithItems } from '../types'
+
+const PAGE_SIZE = 12
 
 export function AngebotePage() {
   const {
-    quotes,
-    isLoadingQuotes,
     addQuote,
     deleteQuote,
     duplicateQuote,
-    refreshQuotes,
     fetchQuoteDetail,
   } = useApp()
+
+  const {
+    data: quotes,
+    pagination,
+    isLoading: isLoadingQuotes,
+    loadPage,
+    refresh,
+  } = usePagedList<Quote>({ fetchPage: fetchQuotesPage, limit: PAGE_SIZE })
 
   const [searchParams, setSearchParams] = useSearchParams()
   const [selectedQuote, setSelectedQuote] = useState<QuoteWithItems | null>(null)
@@ -63,14 +73,14 @@ export function AngebotePage() {
       setIsDuplicating(true)
       try {
         const copy = await duplicateQuote(id)
-        await refreshQuotes()
+        await refresh()
         const detail = await fetchQuoteDetail(copy.id)
         setSelectedQuote(detail)
       } finally {
         setIsDuplicating(false)
       }
     },
-    [duplicateQuote, refreshQuotes, fetchQuoteDetail],
+    [duplicateQuote, refresh, fetchQuoteDetail],
   )
 
   const handleDeleteQuote = useCallback(async () => {
@@ -79,12 +89,12 @@ export function AngebotePage() {
     try {
       await deleteQuote(confirmDelete.id)
       setSelectedQuote(null)
-      await refreshQuotes()
+      await refresh()
     } finally {
       setIsDeleting(false)
       setConfirmDelete(null)
     }
-  }, [confirmDelete, deleteQuote, refreshQuotes])
+  }, [confirmDelete, deleteQuote, refresh])
 
   if (isLoadingQuotes && quotes.length === 0) {
     return (
@@ -124,6 +134,10 @@ export function AngebotePage() {
           onDuplicate={handleDuplicateQuote}
           onDelete={setConfirmDelete}
         />
+      )}
+
+      {!selectedQuote && (
+        <Pagination pagination={pagination} onPageChange={loadPage} />
       )}
 
       <ConfirmDialog
