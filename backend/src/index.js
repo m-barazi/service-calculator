@@ -10,6 +10,7 @@ import { quotesRouter } from './quotes/router.js';
 import { invoicesRouter } from './invoices.js';
 import { dashboardRouter } from './dashboard.js';
 import { seedRouter } from './seed.js';
+import { authRouter } from './auth.js';
 import {
   helmetMiddleware,
   apiRateLimiter,
@@ -53,6 +54,7 @@ app.use('/api/quotes', writeRateLimiter, quotesRouter);
 app.use('/api/quotes/:id/invoice', writeRateLimiter, invoicesRouter);
 app.use('/api/invoices', writeRateLimiter, invoicesRouter);
 app.use('/api/dashboard', dashboardRouter);
+app.use('/api/auth', writeRateLimiter, authRouter);
 
 // The seed endpoint can drop/overwrite data and must never be exposed in production.
 if (isSeedAllowed()) {
