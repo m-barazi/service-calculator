@@ -10,6 +10,9 @@ import {
   Search,
   Trash2,
   TrendingUp,
+  X,
+  Check,
+  Square,
 } from 'lucide-react'
 import { useApp } from '../hooks/useApp'
 import { usePagedList } from '../hooks/usePagedList'
@@ -34,6 +37,10 @@ export function PriceListPage() {
   )
   const [isDeleting, setIsDeleting] = useState(false)
   const [isUpdating, setIsUpdating] = useState(false)
+  const [isBulkUpdating, setIsBulkUpdating] = useState(false)
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false)
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [stats, setStats] = useState<ServiceStats | null>(null)
   const [isLoadingStats, setIsLoadingStats] = useState(false)
 
@@ -112,6 +119,56 @@ export function PriceListPage() {
     }
   }
 
+  const toggleSelection = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }, [])
+
+  const selectAll = useCallback(() => {
+    setSelectedIds(new Set(services.map((s) => s.id)))
+  }, [services])
+
+  const clearSelection = useCallback(() => setSelectedIds(new Set()), [])
+
+  const allSelected = useMemo(
+    () => services.length > 0 && services.every((s) => selectedIds.has(s.id)),
+    [services, selectedIds],
+  )
+
+  const handleBulkVisibility = useCallback(
+    async (visible: boolean) => {
+      if (selectedIds.size === 0) return
+      setIsBulkUpdating(true)
+      try {
+        await Promise.all([...selectedIds].map((id) => updateService(id, { visible })))
+        await refresh()
+        await loadStats()
+        clearSelection()
+      } finally {
+        setIsBulkUpdating(false)
+      }
+    },
+    [selectedIds, updateService, refresh, loadStats, clearSelection],
+  )
+
+  const handleBulkDelete = useCallback(async () => {
+    if (selectedIds.size === 0) return
+    setIsBulkDeleting(true)
+    try {
+      await Promise.all([...selectedIds].map((id) => deleteService(id)))
+      await refresh()
+      await loadStats()
+      clearSelection()
+      setConfirmBulkDelete(false)
+    } finally {
+      setIsBulkDeleting(false)
+    }
+  }, [selectedIds, deleteService, refresh, loadStats, clearSelection])
+
   const categoryCountMap = useMemo(() => {
     const map = new Map<string, number>()
     stats?.categoryCounts.forEach((c) => map.set(c.categoryId, c.count))
@@ -172,11 +229,20 @@ export function PriceListPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Suche…"
-            className="input w-full pl-10"
+            className="input w-full pl-10 pr-9"
           />
+          {search && (
+            <button
+              onClick={() => setSearch('')}
+              className="absolute right-2 top-1/2 -translate-y-1/2 qty-btn"
+              aria-label="Suche löschen"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
         </div>
         {displayCategories.length > 1 && (
-          <div className="flex flex-wrap gap-1.5">
+          <div className="-mx-3 flex flex-nowrap gap-1.5 overflow-x-auto px-3 pb-1 scrollbar-hide md:flex-wrap md:overflow-visible md:px-0 md:pb-0">
             <CategoryChip
               label="Alle"
               count={stats?.totalCount ?? 0}
@@ -201,7 +267,21 @@ export function PriceListPage() {
       {/* ─── Desktop table ───────────────────────────── */}
       <div className="card hidden overflow-hidden md:block">
         {/* Header row */}
-        <div className="grid grid-cols-[2fr_1fr_120px_120px_110px_120px] gap-2 border-b border-border bg-canvas/40 px-5 py-3 text-2xs font-semibold uppercase tracking-wider text-ink-muted">
+        <div className="grid grid-cols-[36px_2fr_1fr_120px_120px_110px_120px] gap-2 border-b border-border bg-canvas/40 px-5 py-3 text-2xs font-semibold uppercase tracking-wider text-ink-muted">
+          <span className="flex items-center">
+            <button
+              onClick={() => (allSelected ? clearSelection() : selectAll())}
+              className="qty-btn"
+              aria-label={allSelected ? 'Auswahl aufheben' : 'Alle auswählen'}
+              title={allSelected ? 'Auswahl aufheben' : 'Alle auswählen'}
+            >
+              {allSelected ? (
+                <Check className="h-4 w-4 text-accent" />
+              ) : (
+                <Square className="h-4 w-4" />
+              )}
+            </button>
+          </span>
           <span>Name</span>
           <span>Kategorie</span>
           <span className="text-right">Einkauf (Netto)</span>
@@ -218,8 +298,22 @@ export function PriceListPage() {
             return (
               <div
                 key={s.id}
-                className="group grid grid-cols-[2fr_1fr_120px_120px_110px_120px] gap-2 px-5 py-3.5 transition-colors hover:bg-elevated/40"
+                className="group grid grid-cols-[36px_2fr_1fr_120px_120px_110px_120px] gap-2 px-5 py-3.5 transition-colors hover:bg-elevated/40"
               >
+                <span className="flex items-center">
+                  <button
+                    onClick={() => toggleSelection(s.id)}
+                    className="qty-btn"
+                    disabled={isBulkUpdating || isBulkDeleting}
+                    aria-label={selectedIds.has(s.id) ? 'Auswahl entfernen' : 'Auswählen'}
+                  >
+                    {selectedIds.has(s.id) ? (
+                      <Check className="h-4 w-4 text-accent" />
+                    ) : (
+                      <Square className="h-4 w-4" />
+                    )}
+                  </button>
+                </span>
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="flex flex-col min-w-0">
                     <span className="font-medium text-ink truncate">
@@ -324,18 +418,32 @@ export function PriceListPage() {
               className="card flex flex-col gap-3 p-4"
             >
               <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  <h3 className="font-semibold text-ink truncate">
-                    {s.name}
-                  </h3>
-                  <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                    <span className="badge-neutral">{categoryName}</span>
-                    {!s.visible && (
-                      <span className="badge-neutral">Versteckt</span>
+                <div className="flex min-w-0 flex-1 items-start gap-2">
+                  <button
+                    onClick={() => toggleSelection(s.id)}
+                    className="qty-btn mt-0.5 shrink-0"
+                    disabled={isBulkUpdating || isBulkDeleting}
+                    aria-label={selectedIds.has(s.id) ? 'Auswahl entfernen' : 'Auswählen'}
+                  >
+                    {selectedIds.has(s.id) ? (
+                      <Check className="h-4 w-4 text-accent" />
+                    ) : (
+                      <Square className="h-4 w-4" />
                     )}
-                    {s.pinned && (
-                      <span className="badge-accent">Gepinnt</span>
-                    )}
+                  </button>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="font-semibold text-ink truncate">
+                      {s.name}
+                    </h3>
+                    <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                      <span className="badge-neutral">{categoryName}</span>
+                      {!s.visible && (
+                        <span className="badge-neutral">Versteckt</span>
+                      )}
+                      {s.pinned && (
+                        <span className="badge-accent">Gepinnt</span>
+                      )}
+                    </div>
                   </div>
                 </div>
                 <div className="flex shrink-0 gap-0.5">
@@ -436,11 +544,65 @@ export function PriceListPage() {
         </div>
       )}
 
+      {/* ─── Bulk toolbar ──────────────────────────────── */}
+      {selectedIds.size > 0 && (
+        <div className="sticky bottom-4 z-10 mx-auto mt-6 flex w-full max-w-xl flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-surface p-3 shadow-lg md:bottom-6">
+          <span className="px-2 text-sm font-medium text-ink">
+            {selectedIds.size} {selectedIds.size === 1 ? 'Leistung' : 'Leistungen'} ausgewählt
+          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => handleBulkVisibility(true)}
+              disabled={isBulkUpdating || isBulkDeleting}
+              className="btn-secondary text-xs"
+            >
+              <Eye className="h-3.5 w-3.5" />
+              Sichtbar
+            </button>
+            <button
+              onClick={() => handleBulkVisibility(false)}
+              disabled={isBulkUpdating || isBulkDeleting}
+              className="btn-secondary text-xs"
+            >
+              <EyeOff className="h-3.5 w-3.5" />
+              Verstecken
+            </button>
+            <button
+              onClick={() => setConfirmBulkDelete(true)}
+              disabled={isBulkUpdating || isBulkDeleting}
+              className="btn-danger text-xs"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Löschen
+            </button>
+            <button
+              onClick={clearSelection}
+              disabled={isBulkUpdating || isBulkDeleting}
+              className="qty-btn"
+              aria-label="Auswahl aufheben"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {services.length > 0 && (
         <div className="mt-6">
           <Pagination pagination={pagination} onPageChange={loadPage} />
         </div>
       )}
+
+      <ConfirmDialog
+        open={confirmBulkDelete}
+        onClose={() => setConfirmBulkDelete(false)}
+        onConfirm={handleBulkDelete}
+        title={`${selectedIds.size} Leistungen löschen?`}
+        description="Die ausgewählten Leistungen werden dauerhaft entfernt. Diese Aktion kann nicht rückgängig gemacht werden."
+        confirmLabel={isBulkDeleting ? 'Löschen...' : 'Löschen'}
+        variant="danger"
+        disabled={isBulkDeleting}
+      />
 
       {/* Modals */}
       <ServiceFormModal
