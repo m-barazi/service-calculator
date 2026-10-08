@@ -15,5 +15,8 @@
     "helmet": "^8.3.0",
     "pg": "^8.11.3",
     "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "supertest": "^7.3.1"
   }
 }

@@ -55,11 +55,19 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-ensureTables().then(() => {
+export { app };
+
+export async function startServer() {
+  await ensureTables();
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`Backend server running on port ${PORT}`);
   });
-}).catch((err) => {
-  console.error('Failed to ensure database tables:', err);
-  process.exit(1);
-});
+}
+
+// Start the server only when this file is executed directly (not imported in tests).
+if (process.env.NODE_ENV !== 'test' && import.meta.url === `file://${process.argv[1]}`) {
+  startServer().catch((err) => {
+    console.error('Failed to ensure database tables:', err);
+    process.exit(1);
+  });
+}
