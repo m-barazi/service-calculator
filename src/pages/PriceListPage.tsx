@@ -31,6 +31,10 @@ export function PriceListPage() {
   const [editing, setEditing] = useState<Service | undefined>(undefined)
   const [cloning, setCloning] = useState<Service | undefined>(undefined)
   const [creating, setCreating] = useState(false)
+
+  const modalOpen = creating || !!editing || !!cloning
+  const modalService = editing
+  const modalCloneFrom = cloning
   const [confirmDelete, setConfirmDelete] = useState<Service | undefined>(
     undefined,
   )
@@ -623,30 +627,16 @@ export function PriceListPage() {
 
       {/* Modals */}
       <ServiceFormModal
-        open={creating}
+        open={modalOpen}
         onClose={() => {
           setCreating(false)
-          refresh()
-          loadStats()
-        }}
-      />
-      <ServiceFormModal
-        open={!!editing}
-        onClose={() => {
           setEditing(undefined)
-          refresh()
-          loadStats()
-        }}
-        service={editing}
-      />
-      <ServiceFormModal
-        open={!!cloning}
-        onClose={() => {
           setCloning(undefined)
           refresh()
           loadStats()
         }}
-        cloneFrom={cloning}
+        service={modalService}
+        cloneFrom={modalCloneFrom}
       />
       <ConfirmDialog
         open={!!confirmDelete}

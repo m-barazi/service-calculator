@@ -236,18 +236,15 @@ export function ServiceFormModal({
             className="input w-full"
           >
             <option value="">Kategorie wählen…</option>
-            {categories.map((c) => {
-              const isCurrent = prefillSource?.categoryId === c.id
-              const show = c.visible || isCurrent
-              if (!show) return null
-              return (
+            {categories
+              .filter((c) => c.visible || prefillSource?.categoryId === c.id)
+              .map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.icon ? `${c.icon} ` : ''}
                   {c.name}
                   {!c.visible ? ' (versteckt)' : ''}
                 </option>
-              )
-            })}
+              ))}
           </select>
         </Field>
 

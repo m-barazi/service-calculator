@@ -44,22 +44,23 @@ dashboardRouter.get(
       );
 
       const acceptedTotalResult = await client.query(
-        `SELECT COALESCE(SUM(total_net), 0) AS accepted_total_net
-         FROM quotes
-         WHERE status = 'angenommen'`,
+        `SELECT COALESCE(SUM(qi.quantity * qi.unit_price), 0) AS accepted_total_net
+         FROM quotes q
+         JOIN quote_items qi ON qi.quote_id = q.id
+         WHERE q.status = 'angenommen'`,
       );
       const acceptedTotalNet = parseFloat(acceptedTotalResult.rows[0].accepted_total_net ?? 0);
 
       const accepted90DayResult = await client.query(
-        `SELECT COALESCE(SUM(total_gross), 0) AS accepted_90_gross
-         FROM invoices
-         WHERE status = 'bezahlt'
-           AND paid_at >= NOW() - INTERVAL '90 days'`,
+        `SELECT COALESCE(SUM(i.total_gross), 0) AS accepted_90_gross
+         FROM invoices i
+         WHERE i.status = 'bezahlt'
+           AND i.paid_at >= NOW() - INTERVAL '90 days'`,
       );
       const accepted90DayGross = parseFloat(accepted90DayResult.rows[0].accepted_90_gross ?? 0);
 
       const topServicesResult = await client.query(
-        `SELECT s.id, s.name, COUNT(*) AS count, SUM(qi.total_gross) AS total_gross
+        `SELECT s.id, s.name, COUNT(*) AS count, SUM(qi.quantity * qi.unit_price) AS total_gross
          FROM quote_items qi
          JOIN services s ON s.id = qi.service_id
          JOIN quotes q ON q.id = qi.quote_id
