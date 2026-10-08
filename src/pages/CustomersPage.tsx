@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Mail, MapPin, Pencil, Phone, Plus, Search, Trash2, User } from 'lucide-react'
 import { useApp } from '../hooks/useApp'
+import { usePagedList } from '../hooks/usePagedList'
 import { fetchCustomersPage } from '../lib/api'
-import type { Customer, PaginationMeta } from '../types'
+import type { Customer } from '../types'
 import { CustomerFormModal } from '../components/CustomerFormModal'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { Pagination } from '../components/Pagination'
@@ -11,31 +12,15 @@ const PAGE_SIZE = 12
 
 export function CustomersPage() {
   const { deleteCustomer } = useApp()
-  const [customers, setCustomers] = useState<Customer[]>([])
-  const [pagination, setPagination] = useState<PaginationMeta>({ page: 1, limit: PAGE_SIZE, total: 0, totalPages: 0 })
-  const [isLoading, setIsLoading] = useState(true)
+  const { data: customers, pagination, isLoading, loadPage, refresh } = usePagedList<Customer>({
+    fetchPage: fetchCustomersPage,
+    limit: PAGE_SIZE,
+  })
   const [search, setSearch] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
   const [editingCustomer, setEditingCustomer] = useState<Customer | undefined>()
   const [confirmDelete, setConfirmDelete] = useState<Customer | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
-
-  const loadPage = async (page: number) => {
-    setIsLoading(true)
-    try {
-      const result = await fetchCustomersPage(page, PAGE_SIZE)
-      setCustomers(result.data)
-      setPagination(result.pagination)
-    } catch (error) {
-      console.error('Failed to load customers:', error)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    loadPage(1)
-  }, [])
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -61,7 +46,7 @@ export function CustomersPage() {
   const closeModal = () => {
     setModalOpen(false)
     setEditingCustomer(undefined)
-    loadPage(pagination.page)
+    refresh()
   }
 
   const handleDelete = async () => {
@@ -69,15 +54,11 @@ export function CustomersPage() {
     setIsDeleting(true)
     try {
       await deleteCustomer(confirmDelete.id)
-      await loadPage(pagination.page)
+      await refresh()
     } finally {
       setIsDeleting(false)
       setConfirmDelete(null)
     }
-  }
-
-  const handlePageChange = (page: number) => {
-    loadPage(page)
   }
 
   if (isLoading && customers.length === 0) {
@@ -160,7 +141,7 @@ export function CustomersPage() {
         </div>
       )}
 
-      <Pagination pagination={pagination} onPageChange={handlePageChange} />
+      <Pagination pagination={pagination} onPageChange={loadPage} />
 
       <CustomerFormModal open={modalOpen} onClose={closeModal} customer={editingCustomer} />
 

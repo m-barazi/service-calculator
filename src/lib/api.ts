@@ -388,6 +388,16 @@ export async function fetchQuotes(): Promise<Quote[]> {
   return data.map(toCamelQuote)
 }
 
+export async function fetchQuotesPage(page: number, limit: number): Promise<PaginatedResponse<Quote>> {
+  const res = await fetch(`${API_URL}/quotes?page=${page}&limit=${limit}`)
+  if (!res.ok) throw new Error(await extractError(res, 'Angebote konnten nicht geladen werden'))
+  const data = await res.json()
+  return {
+    data: data.data.map(toCamelQuote),
+    pagination: data.pagination as PaginationMeta,
+  }
+}
+
 export async function fetchQuote(id: string): Promise<QuoteWithItems> {
   const res = await fetch(`${API_URL}/quotes/${id}`)
   if (!res.ok) throw new Error(await extractError(res, 'Angebot konnte nicht geladen werden'))
@@ -520,6 +530,16 @@ export async function fetchProjects(): Promise<Project[]> {
   return data.map(toCamelProject)
 }
 
+export async function fetchProjectsPage(page: number, limit: number): Promise<PaginatedResponse<Project>> {
+  const res = await fetch(`${API_URL}/projects?page=${page}&limit=${limit}`)
+  if (!res.ok) throw new Error(await extractError(res, 'Projekte konnten nicht geladen werden'))
+  const data = await res.json()
+  return {
+    data: data.data.map(toCamelProject),
+    pagination: data.pagination as PaginationMeta,
+  }
+}
+
 export async function fetchProject(id: string): Promise<Project> {
   const res = await fetch(`${API_URL}/projects/${id}`)
   if (!res.ok) throw new Error(await extractError(res, 'Projekt konnte nicht geladen werden'))
@@ -565,6 +585,16 @@ export async function fetchInvoices(): Promise<Invoice[]> {
   if (!res.ok) throw new Error(await extractError(res, 'Rechnungen konnten nicht geladen werden'))
   const data = await res.json()
   return data.map(toCamelInvoice)
+}
+
+export async function fetchInvoicesPage(page: number, limit: number): Promise<PaginatedResponse<Invoice>> {
+  const res = await fetch(`${API_URL}/invoices?page=${page}&limit=${limit}`)
+  if (!res.ok) throw new Error(await extractError(res, 'Rechnungen konnten nicht geladen werden'))
+  const data = await res.json()
+  return {
+    data: data.data.map(toCamelInvoice),
+    pagination: data.pagination as PaginationMeta,
+  }
 }
 
 export async function fetchInvoice(id: string): Promise<InvoiceWithItems> {
