@@ -1,5 +1,5 @@
 /// <reference types="vite/client" />
-import type { Service, Category, Customer, Quote, QuoteItem, QuoteWithItems, DashboardData, Project, Invoice, InvoiceWithItems, InvoiceStatus } from '../types'
+import type { Service, Category, Customer, Quote, QuoteItem, QuoteWithItems, DashboardData, Project, Invoice, InvoiceWithItems, InvoiceStatus, PaginatedResponse, PaginationMeta } from '../types'
 
 const API_URL = import.meta.env.VITE_API_URL || '/api'
 
@@ -136,6 +136,16 @@ export async function fetchCustomers(): Promise<Customer[]> {
   if (!res.ok) throw new Error(await extractError(res, 'Kunden konnten nicht geladen werden'))
   const data = await res.json()
   return data.map(toCamelCustomer)
+}
+
+export async function fetchCustomersPage(page: number, limit: number): Promise<PaginatedResponse<Customer>> {
+  const res = await fetch(`${API_URL}/customers?page=${page}&limit=${limit}`)
+  if (!res.ok) throw new Error(await extractError(res, 'Kunden konnten nicht geladen werden'))
+  const data = await res.json()
+  return {
+    data: data.data.map(toCamelCustomer),
+    pagination: data.pagination as PaginationMeta,
+  }
 }
 
 export async function createCustomer(customer: Omit<Customer, 'id' | 'createdAt' | 'updatedAt'>): Promise<Customer> {

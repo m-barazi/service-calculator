@@ -257,3 +257,15 @@ export interface DashboardData {
   topServices: Array<{ serviceId: string; name: string; count: number; totalGross: number }>
   recentQuotes: Quote[]
 }
+
+export interface PaginationMeta {
+  page: number
+  limit: number
+  total: number
+  totalPages: number
+}
+
+export interface PaginatedResponse<T> {
+  data: T[]
+  pagination: PaginationMeta
+}
