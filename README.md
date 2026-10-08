@@ -21,6 +21,12 @@ Eine moderne Web-App zur Berechnung von Dienstleistungskosten, Verwaltung von Pr
 - **Kundenstammdaten** — Adressen, Kontaktdaten und Notizen verwalten
 - **Warenkorb → Angebot** — ausgewählte Leistungen direkt in ein Angebot überführen
 - **Angebots-Suche & Filter** — nach Titel, Nummer, Kunde und Status filtern
+- **Angebotsliste mit Finanzdaten** — Bruttobetrag direkt auf der Card + Inline-Status-Change
+- **Rechnungs-Quick-Actions** — Status-Wechsel in der Übersicht, Bezahlt-Datum, Fälligkeits-Indikator
+- **Kunden-360°-Ansicht** — Historie, verknüpfte Angebote/Projekte/Rechnungen, Kontaktaktionen
+- **Projekt-Finanzübersicht** — Angebotssumme, abgerechneter Betrag, offener Betrag, Anzahl Angebote
+- **Preislisten-Bulk-Auswahl** — Mehrfachauswahl von Leistungen mit Sichtbar/Verstecken/Löschen
+- **Kategorie Drag & Drop** — Desktop-Sortierung per Drag-Handle
 - **Dashboard** — Kennzahlen, Umsatz, Status-Verteilung und Top-Leistungen
 - **Mehrwertsteuer** stufenlos einstellbar (0–30 %)
 - **Dark Mode** (Hell / Dunkel / System)
@@ -206,6 +212,13 @@ Basis-URL: `/api`
 | `/quotes/:id/items/reorder` | PATCH |
 | `/customers` | GET, POST |
 | `/customers/:id` | GET, PUT, DELETE |
+| `/projects` | GET, POST |
+| `/projects/:id` | GET, PUT, DELETE |
+| `/projects/:id/quotes` | GET |
+| `/projects/:id/finances` | GET |
+| `/invoices` | GET |
+| `/invoices/:id` | GET, PUT, DELETE |
+| `/invoices/from-quote/:id` | POST |
 | `/dashboard` | GET |
 | `/seed` | POST |
 | `/health` | GET |
@@ -221,10 +234,10 @@ Basis-URL: `/api`
 ├── db/                      # PostgreSQL-Image mit init.sql
 ├── public/                  # Statische Assets, Manifest, Favicon
 ├── src/
-│   ├── components/          # UI-Bausteine
+│   ├── components/          # UI-Bausteine (CustomerDetail, SortableCategoryRow, QuoteList, ...)
 │   ├── hooks/               # useApp (Global State), useTheme
 │   ├── lib/                 # api, calc, format, pdf, storage
-│   ├── pages/               # Seiten (Rechner, Angebote, Kunden, Kategorien, Preisliste, Dashboard, Einstellungen)
+│   ├── pages/               # Seiten (Rechner, Angebote, Kunden, Kategorien, Preisliste, Projekte, Rechnungen, Dashboard, Einstellungen)
 │   ├── App.tsx              # Routes
 │   ├── main.tsx             # Entry
 │   ├── index.css            # Tailwind + Design-Tokens
@@ -233,6 +246,7 @@ Basis-URL: `/api`
 ├── Dockerfile               # Frontend-Build mit nginx
 ├── nginx.conf               # nginx-Default-Config
 ├── nginx.conf.example       # Beispiel-Config für manuelles Deployment
+├── UIUX_OPTIMIZATIONS.md  # Dokumentation des UI/UX-Optimierungslaufs
 └── .env.example             # Erforderliche Umgebungsvariablen
 ```
 
