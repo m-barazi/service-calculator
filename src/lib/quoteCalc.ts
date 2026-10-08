@@ -1,12 +1,13 @@
 import type { QuoteItem, QuoteLineComputation, QuoteTotals, Service } from '../types'
+import { toCents, toEuros, addVatCents, computeDiscountCents } from './cents'
 
 export function computeQuoteLine(
   item: QuoteItem,
   vatRate: number,
 ): QuoteLineComputation {
-  const lineNet = item.quantity * item.unitPrice
-  const lineGross = lineNet * (1 + vatRate)
-  return { item, service: item.service, lineNet, lineGross }
+  const lineNetCents = toCents(item.unitPrice) * item.quantity
+  const lineGrossCents = addVatCents(lineNetCents, vatRate)
+  return { item, service: item.service, lineNet: toEuros(lineNetCents), lineGross: toEuros(lineGrossCents) }
 }
 
 export function computeQuoteTotals(
@@ -17,25 +18,18 @@ export function computeQuoteTotals(
 ): QuoteTotals {
   const lines = items.map((item) => computeQuoteLine(item, vatRate))
 
-  const subtotalNet = lines.reduce((s, l) => s + l.lineNet, 0)
-
-  let discountAmount = 0
-  if (discountType === 'percent' && discountValue) {
-    discountAmount = subtotalNet * (discountValue / 100)
-  } else if (discountType === 'amount' && discountValue) {
-    discountAmount = discountValue
-  }
-
-  const totalNet = subtotalNet - discountAmount
-  const vatAmount = totalNet * vatRate
-  const totalGross = totalNet + vatAmount
+  const subtotalNetCents = lines.reduce((s, l) => s + toCents(l.lineNet), 0)
+  const discountAmountCents = computeDiscountCents(subtotalNetCents, discountType as 'percent' | 'amount' | undefined, discountValue ?? 0)
+  const totalNetCents = Math.max(0, subtotalNetCents - discountAmountCents)
+  const totalGrossCents = addVatCents(totalNetCents, vatRate)
+  const vatAmountCents = totalGrossCents - totalNetCents
 
   return {
-    subtotalNet,
-    discountAmount,
-    totalNet,
-    vatAmount,
-    totalGross,
+    subtotalNet: toEuros(subtotalNetCents),
+    discountAmount: toEuros(discountAmountCents),
+    totalNet: toEuros(totalNetCents),
+    vatAmount: toEuros(vatAmountCents),
+    totalGross: toEuros(totalGrossCents),
     lines,
   }
 }

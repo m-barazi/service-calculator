@@ -2,6 +2,7 @@ import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import type { QuoteWithItems, QuoteTotals, Settings } from '../types'
 import { formatDate, formatEUR, formatPct } from './format'
+import { toCents, toEuros, addVatCents } from './cents'
 
 // ── Options ────────────────────────────────────────────────────────────────
 
@@ -254,14 +255,14 @@ export function generateQuotePdf(
     doc.setDrawColor(BORDER[0], BORDER[1], BORDER[2])
     doc.line(boxX + 14, boxY - 6, boxX + boxW - 14, boxY - 6)
 
-    // Calculate internal totals from lines
-    let totalCostNet = 0
-    let totalCostGross = 0
+    // Calculate internal totals from lines using cent-safe arithmetic
+    let totalCostNetCents = 0
     for (const l of totals.lines) {
       const purchasePrice = l.item.purchasePrice ?? (l.service ? l.service.purchasePrice : 0)
-      totalCostNet += purchasePrice * l.item.quantity
-      totalCostGross += purchasePrice * (1 + vatRate) * l.item.quantity
+      totalCostNetCents += toCents(purchasePrice) * l.item.quantity
     }
+    const totalCostNet = toEuros(totalCostNetCents)
+    const totalCostGross = toEuros(addVatCents(totalCostNetCents, vatRate))
     const profitNet = totals.totalNet - totalCostNet
     const profitMarginPct = totals.totalNet > 0 ? profitNet / totals.totalNet : 0
 

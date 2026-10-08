@@ -105,13 +105,15 @@ describe('computeQuoteTotals', () => {
     expect(totals.totalNet).toBe(100)
   })
 
-  it('does not apply negative totals when discount exceeds subtotal', () => {
+  it('floors discount at subtotal so totals never go negative', () => {
     const items = [makeItem({ quantity: 1, unitPrice: 30 })]
 
     const totals = computeQuoteTotals(items, VAT, 'amount', 50)
 
-    expect(totals.totalNet).toBe(-20)
-    expect(totals.vatAmount).toBeCloseTo(-3.8, 5)
+    expect(totals.discountAmount).toBe(30)
+    expect(totals.totalNet).toBe(0)
+    expect(totals.vatAmount).toBe(0)
+    expect(totals.totalGross).toBe(0)
   })
 })
 
