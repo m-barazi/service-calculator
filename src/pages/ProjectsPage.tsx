@@ -1,13 +1,24 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, ArrowRight, FileText, FolderKanban, Pencil, Plus, Search, Trash2 } from 'lucide-react'
+import {
+  ArrowLeft,
+  ArrowRight,
+  ChevronDown,
+  FileText,
+  FolderKanban,
+  Pencil,
+  Plus,
+  Search,
+  Trash2,
+  X,
+} from 'lucide-react'
 import { useApp } from '../hooks/useApp'
 import { usePagedList } from '../hooks/usePagedList'
 import { fetchProjectsPage } from '../lib/api'
 import type { Project, ProjectStatus, Quote } from '../types'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { Pagination } from '../components/Pagination'
-import { formatDate } from '../lib/format'
+import { formatDate, formatEUR } from '../lib/format'
 
 const STATUS_META: Record<
   ProjectStatus,
@@ -28,6 +39,7 @@ export function ProjectsPage() {
     addProject,
     updateProject,
     fetchProjectQuotes,
+    fetchProjectFinances,
   } = useApp()
   const {
     data: projects,
@@ -46,6 +58,14 @@ export function ProjectsPage() {
   const [selectedProject, setSelectedProject] = useState<Project | null>(null)
   const [projectQuotes, setProjectQuotes] = useState<Quote[]>([])
   const [isLoadingQuotes, setIsLoadingQuotes] = useState(false)
+  const [finances, setFinances] = useState<{
+    quotesTotalGross: number
+    invoicesTotalGross: number
+    openAmount: number
+    quoteCount: number
+  } | null>(null)
+  const [isLoadingFinances, setIsLoadingFinances] = useState(false)
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false)
 
   // Open project detail from URL query param once projects are loaded
   useEffect(() => {
@@ -104,13 +124,34 @@ export function ProjectsPage() {
   const openProjectDetail = async (project: Project) => {
     setSelectedProject(project)
     setIsLoadingQuotes(true)
+    setIsLoadingFinances(true)
     try {
-      const quotes = await fetchProjectQuotes(project.id)
+      const [quotes, fin] = await Promise.all([
+        fetchProjectQuotes(project.id),
+        fetchProjectFinances(project.id),
+      ])
       setProjectQuotes(quotes)
+      setFinances(fin)
     } finally {
       setIsLoadingQuotes(false)
+      setIsLoadingFinances(false)
     }
   }
+
+  const handleStatusChange = useCallback(
+    async (newStatus: ProjectStatus) => {
+      if (!selectedProject || selectedProject.status === newStatus) return
+      setIsUpdatingStatus(true)
+      try {
+        await updateProject(selectedProject.id, { status: newStatus })
+        setSelectedProject((prev) => (prev ? { ...prev, status: newStatus } : prev))
+        await refresh()
+      } finally {
+        setIsUpdatingStatus(false)
+      }
+    },
+    [selectedProject, updateProject, refresh],
+  )
 
   if (selectedProject) {
     return (
@@ -118,10 +159,14 @@ export function ProjectsPage() {
         project={selectedProject}
         quotes={projectQuotes}
         isLoadingQuotes={isLoadingQuotes}
+        finances={finances}
+        isLoadingFinances={isLoadingFinances}
         onBack={() => setSelectedProject(null)}
         onEdit={() => openEdit(selectedProject)}
         onDelete={() => setConfirmDelete(selectedProject)}
         onOpenQuote={(id) => navigate(`/angebote?id=${id}`)}
+        onStatusChange={handleStatusChange}
+        isUpdatingStatus={isUpdatingStatus}
       />
     )
   }
@@ -166,8 +211,17 @@ export function ProjectsPage() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Projekte suchen..."
-          className="input w-full pl-10"
+          className="input w-full pl-10 pr-9"
         />
+        {search && (
+          <button
+            onClick={() => setSearch('')}
+            className="absolute right-2 top-1/2 -translate-y-1/2 qty-btn"
+            aria-label="Suche löschen"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        )}
       </div>
 
       {/* Empty state */}
@@ -285,22 +339,42 @@ function ProjectCard({
   )
 }
 
+const PROJECT_STATUS_OPTIONS: { value: ProjectStatus; label: string }[] = [
+  { value: 'active', label: 'Aktiv' },
+  { value: 'on_hold', label: 'Pausiert' },
+  { value: 'completed', label: 'Abgeschlossen' },
+  { value: 'cancelled', label: 'Storniert' },
+]
+
 function ProjectDetail({
   project,
   quotes,
   isLoadingQuotes,
+  finances,
+  isLoadingFinances,
   onBack,
   onEdit,
   onDelete,
   onOpenQuote,
+  onStatusChange,
+  isUpdatingStatus,
 }: {
   project: Project
   quotes: Quote[]
   isLoadingQuotes: boolean
+  finances: {
+    quotesTotalGross: number
+    invoicesTotalGross: number
+    openAmount: number
+    quoteCount: number
+  } | null
+  isLoadingFinances: boolean
   onBack: () => void
   onEdit: () => void
   onDelete: () => void
   onOpenQuote: (id: string) => void
+  onStatusChange: (status: ProjectStatus) => void
+  isUpdatingStatus: boolean
 }) {
   const { customers } = useApp()
   const meta = STATUS_META[project.status] ?? STATUS_META.active
@@ -324,7 +398,19 @@ function ProjectDetail({
           {project.description && <p className="mt-2 max-w-2xl text-sm text-ink-soft">{project.description}</p>}
         </div>
         <div className="flex items-center gap-2">
-          <span className={`rounded-full px-3 py-1 text-xs font-medium ${meta.cls}`}>{meta.label}</span>
+          <div className="relative">
+            <select
+              value={project.status}
+              onChange={(e) => onStatusChange(e.target.value as ProjectStatus)}
+              disabled={isUpdatingStatus}
+              className="input appearance-none pr-10 text-xs font-medium disabled:opacity-60"
+            >
+              {PROJECT_STATUS_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted" />
+          </div>
           <button onClick={onEdit} className="qty-btn" title="Bearbeiten">
             <Pencil className="h-4 w-4" />
           </button>
@@ -332,6 +418,26 @@ function ProjectDetail({
             <Trash2 className="h-4 w-4" />
           </button>
         </div>
+      </div>
+
+      <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <FinanceCard
+          eyebrow="Angebote gesamt"
+          value={isLoadingFinances ? '—' : finances?.quoteCount.toString() ?? '0'}
+        />
+        <FinanceCard
+          eyebrow="Angebotssumme (Brutto)"
+          value={isLoadingFinances ? '—' : formatEUR(finances?.quotesTotalGross ?? 0)}
+        />
+        <FinanceCard
+          eyebrow="Abgerechnet (Brutto)"
+          value={isLoadingFinances ? '—' : formatEUR(finances?.invoicesTotalGross ?? 0)}
+        />
+        <FinanceCard
+          eyebrow="Offener Betrag"
+          value={isLoadingFinances ? '—' : formatEUR(finances?.openAmount ?? 0)}
+          highlight={(finances?.openAmount ?? 0) > 0}
+        />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
@@ -413,6 +519,30 @@ function ProjectDetail({
           </div>
         </div>
       </div>
+    </div>
+  )
+}
+
+function FinanceCard({
+  eyebrow,
+  value,
+  highlight,
+}: {
+  eyebrow: string
+  value: string
+  highlight?: boolean
+}) {
+  return (
+    <div className="card flex flex-col gap-1 p-5">
+      <p className="eyebrow">{eyebrow}</p>
+      <p
+        className={[
+          'num display-num text-2xl font-bold leading-none',
+          highlight ? 'text-amber-600 dark:text-amber-400' : 'text-ink',
+        ].join(' ')}
+      >
+        {value}
+      </p>
     </div>
   )
 }

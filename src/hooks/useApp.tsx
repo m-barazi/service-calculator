@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from 'react'
 import type { Service, Settings, Category, Customer, Quote, QuoteWithItems, QuoteItem, QuoteStatusHistoryEntry, DashboardData, CartTemplate, CartItem, Project, Invoice, InvoiceWithItems, InvoiceStatus, CartEntry } from '../types'
+import type { ProjectFinances } from '../lib/api'
 import {
   loadCart,
   loadSettings,
@@ -38,6 +39,7 @@ import {
   updateProject as updateProjectApi,
   deleteProject as deleteProjectApi,
   fetchProjectQuotes,
+  fetchProjectFinances,
   fetchQuotes,
   createQuote as createQuoteApi,
   createQuoteWithItems as createQuoteWithItemsApi,
@@ -133,6 +135,7 @@ interface AppState {
   deleteProject: (id: string) => Promise<void>
   refreshProjects: () => Promise<void>
   fetchProjectQuotes: (id: string) => Promise<Quote[]>
+  fetchProjectFinances: (id: string) => Promise<ProjectFinances>
 
   // Invoices (loaded from API)
   invoices: Invoice[]
@@ -449,6 +452,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return await fetchProjectQuotes(id)
     } catch (error) {
       handleError(error, 'Failed to fetch project quotes')
+      throw error
+    }
+  }, [handleError])
+
+  const fetchProjectFinancesHandler = useCallback(async (id: string) => {
+    try {
+      return await fetchProjectFinances(id)
+    } catch (error) {
+      handleError(error, 'Failed to fetch project finances')
       throw error
     }
   }, [handleError])
@@ -884,6 +896,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       deleteProject,
       refreshProjects,
       fetchProjectQuotes: fetchProjectQuotesHandler,
+      fetchProjectFinances: fetchProjectFinancesHandler,
       invoices,
       isLoadingInvoices,
       addInvoiceFromQuote,

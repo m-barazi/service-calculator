@@ -4,6 +4,12 @@ import { toCamelProject, toCamelQuote } from './transforms.js';
 import { validateBody, projectCreateSchema, projectUpdateSchema } from './validation.js';
 import { parsePagination, buildListResponse } from './pagination.js';
 import { asyncHandler } from './error-handler.js';
+import {
+  centsToEuros,
+  eurosToCents,
+  addVatCents,
+  computeDiscountCents,
+} from './money.js';
 
 export const projectsRouter = Router();
 
@@ -135,5 +141,51 @@ projectsRouter.get(
       ORDER BY q.created_at DESC
     `, [id]);
     res.json(result.rows.map((row) => toCamelQuote(row)));
+  }),
+);
+
+projectsRouter.get(
+  '/:id/finances',
+  asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const DEFAULT_VAT_RATE = 0.19;
+    const [quotesResult, invoicesResult] = await Promise.all([
+      pool.query(`
+        SELECT q.id, q.discount_type, q.discount_value,
+               COALESCE(SUM(qi.quantity * qi.unit_price), 0) AS subtotal
+        FROM quotes q
+        LEFT JOIN quote_items qi ON q.id = qi.quote_id
+        WHERE q.project_id = $1
+        GROUP BY q.id, q.discount_type, q.discount_value
+      `, [id]),
+      pool.query(`
+        SELECT COALESCE(SUM(total_gross), 0) AS total
+        FROM invoices
+        WHERE project_id = $1 AND status != 'cancelled'
+      `, [id]),
+    ]);
+
+    let quotesTotalGrossCents = 0;
+    for (const row of quotesResult.rows) {
+      const subtotalCents = eurosToCents(row.subtotal) ?? 0;
+      const discountCents = computeDiscountCents(
+        subtotalCents,
+        row.discount_type,
+        row.discount_value,
+      );
+      const totalNetCents = Math.max(0, subtotalCents - discountCents);
+      const totalGrossCents = addVatCents(totalNetCents, DEFAULT_VAT_RATE);
+      quotesTotalGrossCents += totalGrossCents;
+    }
+
+    const quotesTotalGross = centsToEuros(quotesTotalGrossCents);
+    const invoicesTotalGross = parseFloat(invoicesResult.rows[0].total ?? 0);
+
+    res.json({
+      quotesTotalGross,
+      invoicesTotalGross,
+      openAmount: Math.max(0, quotesTotalGross - invoicesTotalGross),
+      quoteCount: quotesResult.rows.length,
+    });
   }),
 );

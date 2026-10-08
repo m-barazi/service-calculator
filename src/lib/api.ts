@@ -568,11 +568,24 @@ export async function fetchProject(id: string): Promise<Project> {
   return toCamelProject(await res.json())
 }
 
+export interface ProjectFinances {
+  quotesTotalGross: number
+  invoicesTotalGross: number
+  openAmount: number
+  quoteCount: number
+}
+
 export async function fetchProjectQuotes(id: string): Promise<Quote[]> {
   const res = await fetch(`${API_URL}/projects/${id}/quotes`)
   if (!res.ok) throw new Error(await extractError(res, 'Angebote des Projekts konnten nicht geladen werden'))
   const data = await res.json()
   return data.map(toCamelQuote)
+}
+
+export async function fetchProjectFinances(id: string): Promise<ProjectFinances> {
+  const res = await fetch(`${API_URL}/projects/${id}/finances`)
+  if (!res.ok) throw new Error(await extractError(res, 'Projekt-Finanzen konnten nicht geladen werden'))
+  return await res.json()
 }
 
 export async function createProject(project: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>): Promise<Project> {
