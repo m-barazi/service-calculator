@@ -1,4 +1,5 @@
 import type { CartDiscountType, CartItem, CartItemWithPrice, CartTotals, CategorySubtotal, LineComputation, Service } from '../types'
+import { toCents, toEuros, addVatCents, computeDiscountCents } from './cents'
 
 export function computeLine(
   service: Service,
@@ -10,10 +11,14 @@ export function computeLine(
   const safeQty = Math.max(0, quantity)
   const effectivePurchasePrice = purchasePrice ?? service.purchasePrice
   const effectiveSalePrice = unitPrice ?? service.salePrice
-  const totalCostNet = effectivePurchasePrice * safeQty
-  const totalCostGross = totalCostNet * (1 + vatRate)
-  const totalSaleNet = effectiveSalePrice * safeQty
-  const totalSaleGross = totalSaleNet * (1 + vatRate)
+
+  const costNetCents = toCents(effectivePurchasePrice) * safeQty
+  const saleNetCents = toCents(effectiveSalePrice) * safeQty
+
+  const totalCostNet = toEuros(costNetCents)
+  const totalCostGross = toEuros(addVatCents(costNetCents, vatRate))
+  const totalSaleNet = toEuros(saleNetCents)
+  const totalSaleGross = toEuros(addVatCents(saleNetCents, vatRate))
   const profitNet = totalSaleNet - totalCostNet
   const profitMarginPct = totalSaleNet > 0 ? profitNet / totalSaleNet : 0
 
@@ -50,10 +55,10 @@ export function computeCart(
     })
   }
 
-  const totalCostNet = lines.reduce((s, l) => s + l.totalCostNet, 0)
-  const totalCostGross = lines.reduce((s, l) => s + l.totalCostGross, 0)
-  const totalSaleNet = lines.reduce((s, l) => s + l.totalSaleNet, 0)
-  const totalSaleGross = lines.reduce((s, l) => s + l.totalSaleGross, 0)
+  const totalCostNetCents = toCents(lines.reduce((s, l) => s + l.totalCostNet, 0))
+  const totalSaleNetCents = toCents(lines.reduce((s, l) => s + l.totalSaleNet, 0))
+  const totalSaleGrossCents = addVatCents(totalSaleNetCents, vatRate)
+  const totalCostGrossCents = addVatCents(totalCostNetCents, vatRate)
   const itemCount = lines.reduce((s, l) => s + l.quantity, 0)
 
   // Aggregate subtotals per category, preserving first-appearance order.
@@ -84,18 +89,19 @@ export function computeCart(
   }
   const categorySubtotals = Array.from(categoryMap.values())
 
-  let discountAmount = 0
-  if (discountType === 'percent') {
-    discountAmount = totalSaleNet * (discountValue / 100)
-  } else if (discountType === 'amount') {
-    discountAmount = discountValue
-  }
-  discountAmount = Math.min(discountAmount, totalSaleNet)
-  discountAmount = Math.max(0, discountAmount)
+  const discountAmountCents = computeDiscountCents(totalSaleNetCents, discountType, discountValue)
+  const discountedSaleNetCents = Math.max(0, totalSaleNetCents - discountAmountCents)
+  const discountedSaleGrossCents = addVatCents(discountedSaleNetCents, vatRate)
+  const profitNetCents = discountedSaleNetCents - totalCostNetCents
 
-  const discountedSaleNet = Math.max(0, totalSaleNet - discountAmount)
-  const discountedSaleGross = discountedSaleNet * (1 + vatRate)
-  const profitNet = discountedSaleNet - totalCostNet
+  const totalCostNet = toEuros(totalCostNetCents)
+  const totalCostGross = toEuros(totalCostGrossCents)
+  const totalSaleNet = toEuros(totalSaleNetCents)
+  const totalSaleGross = toEuros(totalSaleGrossCents)
+  const discountAmount = toEuros(discountAmountCents)
+  const discountedSaleNet = toEuros(discountedSaleNetCents)
+  const discountedSaleGross = toEuros(discountedSaleGrossCents)
+  const profitNet = toEuros(profitNetCents)
   const profitMarginPct = discountedSaleNet > 0 ? profitNet / discountedSaleNet : 0
 
   return {

@@ -22,6 +22,12 @@ import {
   quoteItemUpdateSchema,
   invoiceUpdateSchema,
 } from './validation.js';
+import {
+  centsToEuros,
+  eurosToCents,
+  addVatCents,
+  computeDiscountCents,
+} from './money.js';
 
 dotenv.config();
 
@@ -719,16 +725,11 @@ async function computeQuoteTotalsForInvoice(quoteId, vatRate) {
   );
   if (result.rows.length === 0) return null;
   const row = result.rows[0];
-  const subtotal = parseFloat(row.subtotal);
-  let discount = 0;
-  if (row.discount_type === 'percent') {
-    discount = subtotal * (parseFloat(row.discount_value) / 100);
-  } else if (row.discount_type === 'amount') {
-    discount = parseFloat(row.discount_value);
-  }
-  const totalNet = Math.max(0, subtotal - discount);
-  const totalGross = totalNet * (1 + vatRate);
-  return { totalNet, totalGross };
+  const subtotalCents = eurosToCents(row.subtotal) ?? 0;
+  const discountCents = computeDiscountCents(subtotalCents, row.discount_type, row.discount_value);
+  const totalNetCents = Math.max(0, subtotalCents - discountCents);
+  const totalGrossCents = addVatCents(totalNetCents, vatRate);
+  return { totalNet: centsToEuros(totalNetCents), totalGross: centsToEuros(totalGrossCents) };
 }
 
 app.post('/api/quotes', validateBody(quoteCreateSchema), async (req, res) => {
@@ -1332,16 +1333,16 @@ app.delete('/api/invoices/:id', async (req, res) => {
 app.get('/api/dashboard', async (req, res) => {
   try {
     const vatRate = parseFloat(req.query.vatRate) || 0.19;
-    const vatFactor = 1 + vatRate;
 
+    // Use cent-safe aggregation: round each line to cents, sum, then convert back.
     const acceptedNetSql = `
       SELECT COALESCE(SUM(net_total), 0) AS total
       FROM (
         SELECT GREATEST(0,
-          COALESCE(SUM(qi.quantity * qi.unit_price), 0) -
+          ROUND(COALESCE(SUM(qi.quantity * qi.unit_price), 0) * 100) -
           CASE
-            WHEN q.discount_type = 'percent' THEN COALESCE(SUM(qi.quantity * qi.unit_price), 0) * q.discount_value / 100
-            WHEN q.discount_type = 'amount' THEN q.discount_value
+            WHEN q.discount_type = 'percent' THEN ROUND(COALESCE(SUM(qi.quantity * qi.unit_price), 0) * 100 * q.discount_value / 100)
+            WHEN q.discount_type = 'amount' THEN ROUND(q.discount_value * 100)
             ELSE 0
           END
         ) AS net_total
@@ -1353,13 +1354,13 @@ app.get('/api/dashboard', async (req, res) => {
     `;
 
     const accepted90GrossSql = `
-      SELECT COALESCE(SUM(net_total * $1), 0) AS total
+      SELECT COALESCE(SUM(ROUND(net_total * (1 + $1))), 0) AS total
       FROM (
         SELECT GREATEST(0,
-          COALESCE(SUM(qi.quantity * qi.unit_price), 0) -
+          ROUND(COALESCE(SUM(qi.quantity * qi.unit_price), 0) * 100) -
           CASE
-            WHEN q.discount_type = 'percent' THEN COALESCE(SUM(qi.quantity * qi.unit_price), 0) * q.discount_value / 100
-            WHEN q.discount_type = 'amount' THEN q.discount_value
+            WHEN q.discount_type = 'percent' THEN ROUND(COALESCE(SUM(qi.quantity * qi.unit_price), 0) * 100 * q.discount_value / 100)
+            WHEN q.discount_type = 'amount' THEN ROUND(q.discount_value * 100)
             ELSE 0
           END
         ) AS net_total
@@ -1368,6 +1369,19 @@ app.get('/api/dashboard', async (req, res) => {
         WHERE q.status = 'accepted' AND q.created_at >= NOW() - INTERVAL '90 days'
         GROUP BY q.id, q.discount_type, q.discount_value
       ) t
+    `;
+
+    const topServicesGrossSql = `
+      SELECT
+        COALESCE(qi.service_id::text, 'custom:' || COALESCE(qi.custom_name, 'custom')) AS service_id,
+        COALESCE(s.name, qi.custom_name, 'Freitext') AS name,
+        SUM(qi.quantity)::int AS count,
+        COALESCE(ROUND(SUM(qi.quantity * qi.unit_price * (1 + $1))::numeric, 2), 0) AS total_gross
+      FROM quote_items qi
+      LEFT JOIN services s ON qi.service_id = s.id
+      GROUP BY qi.service_id, qi.custom_name, s.name
+      ORDER BY count DESC
+      LIMIT 5
     `;
 
     const [countsResult, acceptedNetResult, accepted90Result, topServicesResult, recentResult] = await Promise.all([
@@ -1381,19 +1395,8 @@ app.get('/api/dashboard', async (req, res) => {
         FROM quotes
       `),
       pool.query(acceptedNetSql),
-      pool.query(accepted90GrossSql, [vatFactor]),
-      pool.query(`
-        SELECT
-          COALESCE(qi.service_id::text, 'custom:' || COALESCE(qi.custom_name, 'custom')) AS service_id,
-          COALESCE(s.name, qi.custom_name, 'Freitext') AS name,
-          SUM(qi.quantity)::int AS count,
-          COALESCE(SUM(qi.quantity * qi.unit_price * $1), 0) AS total_gross
-        FROM quote_items qi
-        LEFT JOIN services s ON qi.service_id = s.id
-        GROUP BY qi.service_id, qi.custom_name, s.name
-        ORDER BY count DESC
-        LIMIT 5
-      `, [vatFactor]),
+      pool.query(accepted90GrossSql, [vatRate]),
+      pool.query(topServicesGrossSql, [vatRate]),
       pool.query(`
         SELECT q.*, c.name as customer_name, c.email as customer_email, c.phone as customer_phone,
                c.street as customer_street, c.zip as customer_zip, c.city as customer_city,
@@ -1424,8 +1427,8 @@ app.get('/api/dashboard', async (req, res) => {
     const aggregated = {
       quoteCount: parseInt(counts.total, 10) || 0,
       quoteStatusCounts,
-      acceptedTotalNet: parseFloat(acceptedNetResult.rows[0].total),
-      accepted90DayGross: parseFloat(accepted90Result.rows[0].total),
+      acceptedTotalNet: parseFloat(acceptedNetResult.rows[0].total) / 100,
+      accepted90DayGross: parseFloat(accepted90Result.rows[0].total) / 100,
       topServices,
       recentQuotes: recentResult.rows.map(toCamelQuote),
     };
