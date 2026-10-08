@@ -223,7 +223,7 @@ function ServiceRowRaw({
       {/* Note toggle + inline field */}
       {(showNote || note) ? (
         <div
-          className="flex items-center gap-2"
+          className="flex w-full flex-col items-start gap-2 sm:flex-row sm:items-center"
           onClick={(e) => e.stopPropagation()}
         >
           <button
@@ -242,7 +242,7 @@ function ServiceRowRaw({
             onChange={(e) => handleNoteChange(e.target.value)}
             placeholder="z.B. für mustermax.de"
             maxLength={100}
-            className="input flex-1 text-sm"
+            className="input w-full min-w-0 text-sm"
           />
         </div>
       ) : (

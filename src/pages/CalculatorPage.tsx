@@ -4,6 +4,7 @@ import type { CartDiscountType, Category } from '../types'
 
 type DisplayCategory = Category & { count: number }
 import { useApp } from '../hooks/useApp'
+import { useIsTouch } from '../hooks/useIsTouch'
 import { computeCart } from '../lib/calc'
 import { ServiceRow } from '../components/ServiceRow'
 import { SummaryPanel } from '../components/SummaryPanel'
@@ -45,6 +46,7 @@ export function CalculatorPage() {
   const [orderedCategories, setOrderedCategories] = useState<Category[] | null>(null)
   const [draggingCategoryId, setDraggingCategoryId] = useState<string | null>(null)
   const [dragOverCategoryId, setDragOverCategoryId] = useState<string | null>(null)
+  const isTouch = useIsTouch()
 
   // Stable row action handlers (prevent every ServiceRow re-rendering on parent updates)
   const handleChangeQuantity = useCallback((id: string, q: number) => setQuantity(id, q), [setQuantity])
@@ -239,7 +241,7 @@ export function CalculatorPage() {
 
             {/* Categories */}
             {displayCategories.length > 1 && (
-              <div className="flex flex-wrap gap-1.5 pt-1">
+              <div className="flex flex-nowrap gap-1.5 overflow-x-auto pb-2 pt-1 scrollbar-hide sm:flex-wrap sm:overflow-visible sm:pb-0">
                 <CategoryChip
                   label="Alle"
                   count={visibleServices.length}
@@ -284,19 +286,19 @@ export function CalculatorPage() {
                 return (
                   <div
                     key={cat.id}
-                    draggable
-                    onDragStart={() => setDraggingCategoryId(cat.id)}
-                    onDragEnd={() => {
+                    draggable={!isTouch}
+                    onDragStart={!isTouch ? () => setDraggingCategoryId(cat.id) : undefined}
+                    onDragEnd={!isTouch ? () => {
                       setDraggingCategoryId(null)
                       setDragOverCategoryId(null)
-                    }}
-                    onDragOver={(e) => {
+                    } : undefined}
+                    onDragOver={!isTouch ? (e) => {
                       e.preventDefault()
                       if (draggingCategoryId && draggingCategoryId !== cat.id) {
                         setDragOverCategoryId(cat.id)
                       }
-                    }}
-                    onDrop={(e) => {
+                    } : undefined}
+                    onDrop={!isTouch ? (e) => {
                       e.preventDefault()
                       if (!draggingCategoryId || draggingCategoryId === cat.id) return
                       const reordered = moveCategoryBefore(
@@ -307,7 +309,7 @@ export function CalculatorPage() {
                       setOrderedCategories(reordered)
                       void reorderCategories(reordered.map((c) => c.id))
                       setDragOverCategoryId(null)
-                    }}
+                    } : undefined}
                     className={[
                       'rounded-2xl transition',
                       dragOverCategoryId === cat.id
@@ -318,7 +320,9 @@ export function CalculatorPage() {
                     ].join(' ')}
                   >
                     <div className="flex items-center gap-2 pt-2 pb-1 px-1">
-                      <GripVertical className="h-4 w-4 cursor-grab text-ink-muted active:cursor-grabbing" />
+                      {!isTouch && (
+                        <GripVertical className="h-4 w-4 cursor-grab text-ink-muted active:cursor-grabbing" />
+                      )}
                       {cat.icon && (
                         <span className="text-lg">{cat.icon}</span>
                       )}
