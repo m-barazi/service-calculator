@@ -77,7 +77,7 @@ export function Layout() {
                 <>
                   <Icon className="h-4 w-4 shrink-0" strokeWidth={isActive ? 2.2 : 1.8} />
                   <span>{label}</span>
-                  {to === '/' && cartLineCount > 0 && (
+                  {to === '/rechner' && cartLineCount > 0 && (
                     <span className="ml-auto rounded-full bg-accent/15 px-2 py-0.5 text-2xs font-semibold text-accent-strong num">
                       {cartLineCount}
                     </span>
@@ -176,7 +176,14 @@ export function Layout() {
           >
             {({ isActive }) => (
               <>
-                <Icon className="h-5 w-5" strokeWidth={isActive ? 2.2 : 1.8} />
+                <div className="relative">
+                  <Icon className="h-5 w-5" strokeWidth={isActive ? 2.2 : 1.8} />
+                  {to === '/rechner' && cartLineCount > 0 && (
+                    <span className="absolute -top-1.5 -right-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-bold text-white num shadow-soft">
+                      {cartLineCount}
+                    </span>
+                  )}
+                </div>
                 <span>{label}</span>
                 {isActive && (
                   <span className="absolute top-0 left-1/2 h-[3px] w-8 -translate-x-1/2 rounded-b-full bg-accent" />

@@ -7,9 +7,12 @@ import {
   FileText,
   FolderKanban,
   Mail,
+  Plus,
   RefreshCw,
   Send,
+  Sparkles,
   TrendingUp,
+  UserPlus,
   XCircle,
 } from 'lucide-react'
 import { useApp } from '../hooks/useApp'
@@ -33,7 +36,11 @@ const STATUS_META: Record<
 }
 
 export function DashboardPage() {
-  const { customers, dashboard, isLoadingDashboard, refreshDashboard } = useApp()
+  const { customers, quotes, services, dashboard, isLoadingDashboard, refreshDashboard } = useApp()
+  const hasServices = services.length > 0
+  const hasCustomers = customers.length > 0
+  const hasQuotes = quotes.length > 0
+  const hasAnyBusinessData = hasServices || hasCustomers || hasQuotes
 
   if (isLoadingDashboard) {
     return (
@@ -73,6 +80,10 @@ export function DashboardPage() {
           <TrendingUp className="h-8 w-8 text-ink-muted" strokeWidth={1.5} />
           <p className="text-sm font-medium text-ink">Keine Daten verfügbar</p>
         </div>
+      )}
+
+      {dashboard && !hasAnyBusinessData && (
+        <OnboardingPanel />
       )}
 
       {dashboard && (
@@ -119,7 +130,7 @@ export function DashboardPage() {
               icon={TrendingUp}
             />
             <KpiCard
-              label="Kundenstammdaten"
+              label="Kunden gesamt"
               value={String(customers.length)}
               icon={Mail}
             />
@@ -130,35 +141,53 @@ export function DashboardPage() {
             <div className="card p-5">
               <p className="eyebrow">Angebotsstatus</p>
               <h2 className="mt-1 text-lg font-semibold text-ink">Verteilung</h2>
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                {Object.entries(dashboard.quoteStatusCounts).map(([status, count]) => {
-                  const meta = STATUS_META[status] ?? STATUS_META.draft
-                  const Icon = meta.icon
-                  const pct = dashboard.quoteCount > 0 ? Math.round((count / dashboard.quoteCount) * 100) : 0
-                  return (
-                    <div
-                      key={status}
-                      className="flex items-center gap-3 rounded-xl border border-border bg-surface/40 p-3"
-                    >
-                      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${meta.cls}`}>
-                        <Icon className="h-5 w-5" />
-                      </div>
-                      <div className="flex-1">
-                        <p className="text-sm font-medium text-ink">{meta.label}</p>
-                        <p className="text-2xs text-ink-muted">{count} Angebot{count === 1 ? '' : 'e'} · {pct}%</p>
-                      </div>
-                    </div>
-                  )
-                })}
+              {dashboard.quoteCount === 0 ? (
+                <div className="mt-4 flex flex-col items-center gap-3 rounded-xl border border-dashed border-border bg-surface/30 p-6 text-center">
+                  <FileText className="h-6 w-6 text-ink-muted" strokeWidth={1.5} />
+                  <p className="text-sm text-ink-soft">Noch keine Angebote vorhanden.</p>
+                  <Link to="/rechner" className="btn-primary text-xs">
+                    <Plus className="h-3.5 w-3.5" />
+                    Erstes Angebot erstellen
+                  </Link>
+                </div>
+              ) : (
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                      {Object.entries(dashboard.quoteStatusCounts).map(([status, count]) => {
+                      const meta = STATUS_META[status] ?? STATUS_META.draft
+                      const Icon = meta.icon
+                      const pct = dashboard.quoteCount > 0 ? Math.round((count / dashboard.quoteCount) * 100) : 0
+                      return (
+                        <div
+                          key={status}
+                          className="flex items-center gap-3 rounded-xl border border-border bg-surface/40 p-3"
+                        >
+                          <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${meta.cls}`}>
+                            <Icon className="h-5 w-5" />
+                          </div>
+                          <div className="flex-1">
+                            <p className="text-sm font-medium text-ink">{meta.label}</p>
+                            <p className="text-2xs text-ink-muted">{count} Angebot{count === 1 ? '' : 'e'} · {pct}%</p>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
-            </div>
 
             {/* Top services */}
             <div className="card p-5">
               <p className="eyebrow">Beliebte Leistungen</p>
               <h2 className="mt-1 text-lg font-semibold text-ink">Top 5</h2>
               {dashboard.topServices.length === 0 ? (
-                <p className="mt-4 text-sm text-ink-muted">Noch keine Leistungen in Angeboten.</p>
+                <div className="mt-4 flex flex-col items-center gap-3 rounded-xl border border-dashed border-border bg-surface/30 p-6 text-center">
+                  <Calculator className="h-6 w-6 text-ink-muted" strokeWidth={1.5} />
+                  <p className="text-sm text-ink-soft">Noch keine Leistungen in Angeboten.</p>
+                  <Link to="/rechner" className="btn-primary text-xs">
+                    <ArrowRight className="h-3.5 w-3.5" />
+                    Zum Rechner
+                  </Link>
+                </div>
               ) : (
                 <div className="mt-4 flex flex-col gap-2">
                   {dashboard.topServices.map((s, idx) => (
@@ -196,7 +225,14 @@ export function DashboardPage() {
               </Link>
             </div>
             {dashboard.recentQuotes.length === 0 ? (
-              <p className="text-sm text-ink-muted">Noch keine Angebote vorhanden.</p>
+              <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border bg-surface/30 p-6 text-center">
+                <FileText className="h-6 w-6 text-ink-muted" strokeWidth={1.5} />
+                <p className="text-sm text-ink-soft">Noch keine Angebote vorhanden.</p>
+                <Link to="/rechner" className="btn-primary text-xs">
+                  <Plus className="h-3.5 w-3.5" />
+                  Erstes Angebot erstellen
+                </Link>
+              </div>
             ) : (
               <div className="flex flex-col gap-2">
                 {dashboard.recentQuotes.map((quote) => {
@@ -229,6 +265,77 @@ export function DashboardPage() {
         </>
       )}
     </div>
+  )
+}
+
+function OnboardingPanel() {
+  return (
+    <div className="card overflow-hidden p-0">
+      <div className="bg-gradient-to-br from-accent/10 to-canvas p-6 sm:p-8">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent/15 text-accent">
+            <Sparkles className="h-5 w-5" />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold text-ink">Willkommen im Kostenrechner</h2>
+            <p className="text-sm text-ink-soft">
+              Lege deine ersten Leistungen, Kunden und Angebote an, um das Dashboard zu füllen.
+            </p>
+          </div>
+        </div>
+      </div>
+      <div className="grid gap-3 p-4 sm:grid-cols-3 sm:p-6">
+        <OnboardingCard
+          to="/preisliste"
+          icon={Plus}
+          title="Leistungen anlegen"
+          description="Preise, Kategorien und Dienstleistungen hinterlegen"
+        />
+        <OnboardingCard
+          to="/kunden"
+          icon={UserPlus}
+          title="Kunden anlegen"
+          description="Adressen und Kontaktdaten erfassen"
+        />
+        <OnboardingCard
+          to="/rechner"
+          icon={Calculator}
+          title="Erstes Angebot"
+          description="Im Rechner Leistungen zusammenstellen"
+        />
+      </div>
+    </div>
+  )
+}
+
+function OnboardingCard({
+  to,
+  icon: Icon,
+  title,
+  description,
+}: {
+  to: string
+  icon: typeof FileText
+  title: string
+  description: string
+}) {
+  return (
+    <Link
+      to={to}
+      className="group flex flex-col gap-3 rounded-xl border border-border bg-surface p-4 transition hover:border-border-strong hover:bg-surface/80"
+    >
+      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-canvas text-ink-soft transition group-hover:text-accent">
+        <Icon className="h-4 w-4" />
+      </div>
+      <div>
+        <p className="text-sm font-semibold text-ink">{title}</p>
+        <p className="mt-0.5 text-2xs text-ink-muted">{description}</p>
+      </div>
+      <div className="mt-auto flex items-center gap-1 text-2xs font-medium text-accent">
+        Loslegen
+        <ArrowRight className="h-3 w-3 transition group-hover:translate-x-0.5" />
+      </div>
+    </Link>
   )
 }
 
