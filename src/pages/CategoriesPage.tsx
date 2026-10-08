@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   DndContext,
   closestCenter,
@@ -40,7 +41,8 @@ export function CategoriesPage() {
     deleteCategory,
     reorderCategories,
   } = useApp()
-  const [search, setSearch] = useState('')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [search, setSearch] = useState(() => searchParams.get('search') ?? '')
   const [editing, setEditing] = useState<Category | undefined>(undefined)
   const [creating, setCreating] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState<Category | undefined>(undefined)
@@ -120,6 +122,19 @@ export function CategoriesPage() {
       updateCategory(swapCategory.id, { sortOrder: category.sortOrder }),
     ])
   }
+
+  // Persist search filter in URL for deep-linking.
+  useEffect(() => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        if (search.trim()) next.set('search', search.trim())
+        else next.delete('search')
+        return next
+      },
+      { replace: true },
+    )
+  }, [search, setSearchParams])
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()

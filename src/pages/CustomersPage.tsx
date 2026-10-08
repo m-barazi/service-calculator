@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Mail, MapPin, Pencil, Phone, Plus, Search, Trash2, User } from 'lucide-react'
+import { Mail, MapPin, Pencil, Phone, Plus, Search, Trash2, User, X } from 'lucide-react'
 import { useApp } from '../hooks/useApp'
 import { usePagedList } from '../hooks/usePagedList'
 import { fetchCustomersPage } from '../lib/api'
@@ -19,7 +19,7 @@ export function CustomersPage() {
     limit: PAGE_SIZE,
   })
   const [searchParams, setSearchParams] = useSearchParams()
-  const [search, setSearch] = useState('')
+  const [search, setSearch] = useState(() => searchParams.get('search') ?? '')
   const [modalOpen, setModalOpen] = useState(false)
   const [editingCustomer, setEditingCustomer] = useState<Customer | undefined>()
   const [confirmDelete, setConfirmDelete] = useState<Customer | null>(null)
@@ -36,6 +36,19 @@ export function CustomersPage() {
     setSearchParams({}, { replace: true })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, isLoading, customers])
+
+  // Persist search filter in URL for deep-linking.
+  useEffect(() => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        if (search.trim()) next.set('search', search.trim())
+        else next.delete('search')
+        return next
+      },
+      { replace: true },
+    )
+  }, [search, setSearchParams])
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -138,8 +151,17 @@ export function CustomersPage() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Kunden suchen..."
-          className="input w-full pl-10"
+          className="input w-full pl-10 pr-9"
         />
+        {search && (
+          <button
+            onClick={() => setSearch('')}
+            className="absolute right-2 top-1/2 -translate-y-1/2 qty-btn"
+            aria-label="Suche löschen"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        )}
       </div>
 
       {/* Empty state */}

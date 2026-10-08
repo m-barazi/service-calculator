@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   Copy,
   Eye,
@@ -27,14 +28,13 @@ const PAGE_SIZE = 12
 
 export function PriceListPage() {
   const { isLoading: isLoadingApp, deleteService, updateService, categories: allCategories } = useApp()
-  const [search, setSearch] = useState('')
-  const [activeCategory, setActiveCategory] = useState<string | null>(null)
   const [editing, setEditing] = useState<Service | undefined>(undefined)
   const [cloning, setCloning] = useState<Service | undefined>(undefined)
   const [creating, setCreating] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState<Service | undefined>(
     undefined,
   )
+  const [searchParams, setSearchParams] = useSearchParams()
   const [isDeleting, setIsDeleting] = useState(false)
   const [isUpdating, setIsUpdating] = useState(false)
   const [isBulkUpdating, setIsBulkUpdating] = useState(false)
@@ -43,6 +43,8 @@ export function PriceListPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [stats, setStats] = useState<ServiceStats | null>(null)
   const [isLoadingStats, setIsLoadingStats] = useState(false)
+  const [search, setSearch] = useState(() => searchParams.get('search') ?? '')
+  const [activeCategory, setActiveCategory] = useState<string | null>(() => searchParams.get('category'))
 
   const fetchPage = useCallback(
     (page: number, limit: number) =>
@@ -168,6 +170,21 @@ export function PriceListPage() {
       setIsBulkDeleting(false)
     }
   }, [selectedIds, deleteService, refresh, loadStats, clearSelection])
+
+  // Persist search/category filters in URL for deep-linking.
+  useEffect(() => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        if (search.trim()) next.set('search', search.trim())
+        else next.delete('search')
+        if (activeCategory) next.set('category', activeCategory)
+        else next.delete('category')
+        return next
+      },
+      { replace: true },
+    )
+  }, [search, activeCategory, setSearchParams])
 
   const categoryCountMap = useMemo(() => {
     const map = new Map<string, number>()

@@ -50,7 +50,7 @@ export function ProjectsPage() {
   } = usePagedList<Project>({ fetchPage: fetchProjectsPage, limit: PAGE_SIZE })
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
-  const [search, setSearch] = useState('')
+  const [search, setSearch] = useState(() => searchParams.get('search') ?? '')
   const [modalOpen, setModalOpen] = useState(false)
   const [editingProject, setEditingProject] = useState<Project | undefined>()
   const [confirmDelete, setConfirmDelete] = useState<Project | null>(null)
@@ -77,6 +77,19 @@ export function ProjectsPage() {
     setSearchParams({}, { replace: true })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, isLoadingProjects, projects])
+
+  // Persist search filter in URL for deep-linking.
+  useEffect(() => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        if (search.trim()) next.set('search', search.trim())
+        else next.delete('search')
+        return next
+      },
+      { replace: true },
+    )
+  }, [search, setSearchParams])
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
