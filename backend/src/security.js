@@ -14,11 +14,22 @@ export const helmetMiddleware = helmet({
   crossOriginEmbedderPolicy: isProduction ? undefined : false,
 });
 
+function clientKey(req) {
+  // Behind Traefik/Authentik every request appears to come from the proxy's
+  // IP, so use the original client address when available.
+  const forwarded = req.headers['x-forwarded-for'];
+  if (typeof forwarded === 'string' && forwarded.length > 0) {
+    return forwarded.split(',')[0].trim();
+  }
+  return req.ip;
+}
+
 export const apiRateLimitConfig = {
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 200,
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: clientKey,
   message: { error: 'Too many requests, please try again later.' },
   skip: (req) => req.path === '/api/health',
 };
@@ -28,6 +39,7 @@ export const writeRateLimitConfig = {
   max: 60,
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: clientKey,
   message: { error: 'Too many write requests, please try again later.' },
 };
 
