@@ -2,11 +2,27 @@ import { Router } from 'express';
 import { pool } from './db.js';
 import { toCamel } from './transforms.js';
 import { validateBody, serviceCreateSchema, serviceUpdateSchema } from './validation.js';
+import { parsePagination, buildListResponse } from './pagination.js';
 
 export const servicesRouter = Router();
 
 servicesRouter.get('/', async (req, res) => {
   try {
+    const wantsPagination = req.query.page !== undefined || req.query.limit !== undefined;
+    if (wantsPagination) {
+      const { page, limit, offset } = parsePagination(req.query);
+      const [countResult, rowsResult] = await Promise.all([
+        pool.query('SELECT COUNT(*) FROM services'),
+        pool.query(
+          'SELECT * FROM services ORDER BY pinned DESC, category_id, name LIMIT $1 OFFSET $2',
+          [limit, offset],
+        ),
+      ]);
+      const total = parseInt(countResult.rows[0].count);
+      res.json(buildListResponse(rowsResult.rows.map(toCamel), total, page, limit));
+      return;
+    }
+
     const result = await pool.query('SELECT * FROM services ORDER BY pinned DESC, category_id, name');
     res.json(result.rows.map(toCamel));
   } catch (error) {

@@ -63,6 +63,35 @@ describe('API integration', () => {
       expect(res.status).toBe(500);
       expect(res.body.error).toBe('Failed to fetch services');
     });
+
+    it('returns a paginated response when page or limit is requested', async () => {
+      mockPool([
+        { rows: [{ count: '42' }] },
+        {
+          rows: [
+            {
+              id: 's-1',
+              name: 'Website Design',
+              category_id: '550e8400-e29b-41d4-a716-446655440000',
+              purchase_price: 0,
+              sale_price: 252,
+              default_quantity: 1,
+              url: null,
+              note: null,
+              visible: true,
+              pinned: false,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            },
+          ],
+        },
+      ]);
+
+      const res = await request(app).get('/api/services?page=2&limit=10');
+      expect(res.status).toBe(200);
+      expect(res.body.data).toHaveLength(1);
+      expect(res.body.pagination).toEqual({ page: 2, limit: 10, total: 42, totalPages: 5 });
+    });
   });
 
   describe('POST /api/services', () => {

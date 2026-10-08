@@ -4,11 +4,43 @@ import { generateInvoiceNumber } from './numbers.js';
 import { computeQuoteTotalsForInvoice } from './quotes/totals.js';
 import { toCamelInvoice, toCamelQuoteItem } from './transforms.js';
 import { validateBody, invoiceUpdateSchema } from './validation.js';
+import { parsePagination, buildListResponse } from './pagination.js';
 
 export const invoicesRouter = Router();
 
 invoicesRouter.get('/', async (req, res) => {
   try {
+    const wantsPagination = req.query.page !== undefined || req.query.limit !== undefined;
+    if (wantsPagination) {
+      const { page, limit, offset } = parsePagination(req.query);
+      const [countResult, rowsResult] = await Promise.all([
+        pool.query('SELECT COUNT(*) FROM invoices'),
+        pool.query(
+          `SELECT i.*,
+                  q.quote_number, q.title as quote_title, q.status as quote_status,
+                  q.customer_id as quote_customer_id, q.customer_name as quote_customer_name,
+                  q.project_id as quote_project_id,
+                  c.name as customer_name, c.email as customer_email, c.phone as customer_phone,
+                  c.street as customer_street, c.zip as customer_zip, c.city as customer_city,
+                  c.country as customer_country, c.notes as customer_notes,
+                  c.created_at as customer_created_at, c.updated_at as customer_updated_at,
+                  p.name as project_name, p.status as project_status, p.customer_id as project_customer_id,
+                  pc.name as project_customer_name
+           FROM invoices i
+           LEFT JOIN quotes q ON i.quote_id = q.id
+           LEFT JOIN customers c ON i.customer_id = c.id
+           LEFT JOIN projects p ON i.project_id = p.id
+           LEFT JOIN customers pc ON p.customer_id = pc.id
+           ORDER BY i.created_at DESC
+           LIMIT $1 OFFSET $2`,
+          [limit, offset],
+        ),
+      ]);
+      const total = parseInt(countResult.rows[0].count);
+      res.json(buildListResponse(rowsResult.rows.map(toCamelInvoice), total, page, limit));
+      return;
+    }
+
     const result = await pool.query(`
       SELECT i.*,
              q.quote_number, q.title as quote_title, q.status as quote_status,

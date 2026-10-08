@@ -11,12 +11,35 @@ import {
   quoteUpdateSchema,
   quoteStatusSchema,
 } from '../validation.js';
+import { parsePagination, buildListResponse } from '../pagination.js';
 
 export const quotesRouter = Router();
 quotesRouter.use('/:id/items', quoteItemsRouter);
 
 quotesRouter.get('/', async (req, res) => {
   try {
+    const wantsPagination = req.query.page !== undefined || req.query.limit !== undefined;
+    if (wantsPagination) {
+      const { page, limit, offset } = parsePagination(req.query);
+      const [countResult, rowsResult] = await Promise.all([
+        pool.query('SELECT COUNT(*) FROM quotes'),
+        pool.query(
+          `SELECT q.*, c.name as customer_name, c.email as customer_email, c.phone as customer_phone,
+                  c.street as customer_street, c.zip as customer_zip, c.city as customer_city,
+                  c.country as customer_country, c.notes as customer_notes,
+                  c.created_at as customer_created_at, c.updated_at as customer_updated_at
+           FROM quotes q
+           LEFT JOIN customers c ON q.customer_id = c.id
+           ORDER BY q.created_at DESC
+           LIMIT $1 OFFSET $2`,
+          [limit, offset],
+        ),
+      ]);
+      const total = parseInt(countResult.rows[0].count);
+      res.json(buildListResponse(rowsResult.rows.map(toCamelQuote), total, page, limit));
+      return;
+    }
+
     const result = await pool.query(`
       SELECT q.*, c.name as customer_name, c.email as customer_email, c.phone as customer_phone,
              c.street as customer_street, c.zip as customer_zip, c.city as customer_city,

@@ -2,11 +2,24 @@ import { Router } from 'express';
 import { pool } from './db.js';
 import { toCamelCustomer } from './transforms.js';
 import { validateBody, customerCreateSchema, customerUpdateSchema } from './validation.js';
+import { parsePagination, buildListResponse } from './pagination.js';
 
 export const customersRouter = Router();
 
 customersRouter.get('/', async (req, res) => {
   try {
+    const wantsPagination = req.query.page !== undefined || req.query.limit !== undefined;
+    if (wantsPagination) {
+      const { page, limit, offset } = parsePagination(req.query);
+      const [countResult, rowsResult] = await Promise.all([
+        pool.query('SELECT COUNT(*) FROM customers'),
+        pool.query('SELECT * FROM customers ORDER BY created_at DESC LIMIT $1 OFFSET $2', [limit, offset]),
+      ]);
+      const total = parseInt(countResult.rows[0].count);
+      res.json(buildListResponse(rowsResult.rows.map(toCamelCustomer), total, page, limit));
+      return;
+    }
+
     const result = await pool.query('SELECT * FROM customers ORDER BY created_at DESC');
     res.json(result.rows.map(toCamelCustomer));
   } catch (error) {
