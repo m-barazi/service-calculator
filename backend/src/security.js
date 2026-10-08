@@ -1,5 +1,5 @@
 import helmet from 'helmet';
-import rateLimit, { parseIps } from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 
 const isProduction = process.env.NODE_ENV === 'production';
 
@@ -19,10 +19,10 @@ function clientKey(req) {
   // IP, so use the original client address when available.
   const forwarded = req.headers['x-forwarded-for'];
   if (typeof forwarded === 'string' && forwarded.length > 0) {
-    const ips = parseIps(forwarded);
-    if (ips.length > 0) return ips[0];
+    const first = forwarded.split(',')[0].trim();
+    if (first) return ipKeyGenerator(first);
   }
-  return req.ip;
+  return req.ip ? ipKeyGenerator(req.ip) : req.ip;
 }
 
 export const apiRateLimitConfig = {
