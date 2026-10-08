@@ -77,6 +77,10 @@ export function CustomerDetail({ customer, onBack, onEdit, onDelete }: CustomerD
     [invoices, customer.id],
   )
 
+  const totalQuotesGross = useMemo(
+    () => customerQuotes.reduce((sum, q) => sum + (q.totalGross ?? 0), 0),
+    [customerQuotes],
+  )
   const totalInvoicesGross = useMemo(
     () => customerInvoices.reduce((sum, i) => sum + i.totalGross, 0),
     [customerInvoices],
@@ -199,6 +203,7 @@ export function CustomerDetail({ customer, onBack, onEdit, onDelete }: CustomerD
           quoteCount={customerQuotes.length}
           projectCount={customerProjects.length}
           invoiceCount={customerInvoices.length}
+          quotesTotal={totalQuotesGross}
           invoicesTotal={totalInvoicesGross}
         />
       )}
@@ -223,12 +228,14 @@ function OverviewTab({
   quoteCount,
   projectCount,
   invoiceCount,
+  quotesTotal,
   invoicesTotal,
 }: {
   customer: Customer
   quoteCount: number
   projectCount: number
   invoiceCount: number
+  quotesTotal: number
   invoicesTotal: number
 }) {
   return (
@@ -240,6 +247,7 @@ function OverviewTab({
           <KpiCard icon={ReceiptText} value={invoiceCount.toString()} label="Rechnungen" />
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
+          <KpiCard icon={FileText} value={formatEUR(quotesTotal)} label="Angebotssumme (brutto)" accent />
           <KpiCard icon={ReceiptText} value={formatEUR(invoicesTotal)} label="Rechnungssumme (brutto)" accent />
         </div>
       </div>
@@ -306,9 +314,12 @@ function QuotesTab({ quotes }: { quotes: Quote[] }) {
                 {quote.quoteNumber || 'Ohne Nummer'} · {formatDate(quote.createdAt)}
               </p>
             </div>
-            <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-2xs font-medium ${meta.cls}`}>
-              {meta.label}
-            </span>
+            <div className="flex items-center gap-3">
+              <span className="num text-sm font-semibold text-ink">{formatEUR(quote.totalGross ?? 0)}</span>
+              <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-2xs font-medium ${meta.cls}`}>
+                {meta.label}
+              </span>
+            </div>
           </Link>
         )
       })}

@@ -183,6 +183,10 @@ export interface Quote {
   discountValue: number
   notes?: string
   validUntil?: string
+  /** Aggregated net total from items (may be 0 if not loaded) */
+  totalNet?: number
+  /** Aggregated gross total from items using default VAT (may be 0 if not loaded) */
+  totalGross?: number
   createdAt: string
   updatedAt: string
 }

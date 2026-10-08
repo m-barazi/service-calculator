@@ -61,7 +61,7 @@ export function toCamelProject(row) {
 }
 
 export function toCamelQuote(row) {
-  return {
+  const quote = {
     id: row.id,
     quoteNumber: row.quote_number,
     title: row.title,
@@ -79,6 +79,10 @@ export function toCamelQuote(row) {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
+  if (row.subtotal_net !== undefined) {
+    quote.subtotalNet = parseFloat(row.subtotal_net ?? 0);
+  }
+  return quote;
 }
 
 export function toCamelQuoteItem(row) {

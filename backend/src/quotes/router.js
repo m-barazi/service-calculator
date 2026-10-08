@@ -12,17 +12,43 @@ import {
 } from '../validation.js';
 import { parsePagination, buildListResponse } from '../pagination.js';
 import { asyncHandler } from '../error-handler.js';
+import {
+  eurosToCents,
+  centsToEuros,
+  addVatCents,
+  computeDiscountCents,
+} from '../money.js';
 
 export const quotesRouter = Router();
 quotesRouter.use('/:id/items', quoteItemsRouter);
+
+const DEFAULT_VAT_RATE = 0.19;
+
+function toCamelQuoteWithTotals(row) {
+  const quote = toCamelQuote(row);
+  if (row.subtotal_net === undefined) return quote;
+  const subtotalCents = eurosToCents(Number(row.subtotal_net ?? 0)) ?? 0;
+  const discountCents = computeDiscountCents(subtotalCents, row.discount_type, Number(row.discount_value ?? 0));
+  const totalNetCents = Math.max(0, subtotalCents - discountCents);
+  const totalGrossCents = addVatCents(totalNetCents, DEFAULT_VAT_RATE);
+  quote.totalNet = centsToEuros(totalNetCents);
+  quote.totalGross = centsToEuros(totalGrossCents);
+  return quote;
+}
 
 const quoteListQuery = `
   SELECT q.*, c.name as customer_name, c.email as customer_email, c.phone as customer_phone,
          c.street as customer_street, c.zip as customer_zip, c.city as customer_city,
          c.country as customer_country, c.notes as customer_notes,
-         c.created_at as customer_created_at, c.updated_at as customer_updated_at
+         c.created_at as customer_created_at, c.updated_at as customer_updated_at,
+         COALESCE(sub.subtotal, 0) as subtotal_net
   FROM quotes q
   LEFT JOIN customers c ON q.customer_id = c.id
+  LEFT JOIN (
+    SELECT quote_id, SUM(quantity * unit_price) as subtotal
+    FROM quote_items
+    GROUP BY quote_id
+  ) sub ON sub.quote_id = q.id
 `;
 
 quotesRouter.get(
@@ -39,12 +65,12 @@ quotesRouter.get(
         ),
       ]);
       const total = parseInt(countResult.rows[0].count);
-      res.json(buildListResponse(rowsResult.rows.map(toCamelQuote), total, page, limit));
+      res.json(buildListResponse(rowsResult.rows.map((row) => toCamelQuoteWithTotals(row)), total, page, limit));
       return;
     }
 
     const result = await pool.query(`${quoteListQuery} ORDER BY q.created_at DESC`);
-    res.json(result.rows.map(toCamelQuote));
+    res.json(result.rows.map((row) => toCamelQuoteWithTotals(row)));
   }),
 );
 

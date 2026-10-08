@@ -12,12 +12,15 @@ import type { Quote, QuoteStatus, QuoteWithItems } from '../types'
 
 const PAGE_SIZE = 12
 
+const STATUS_VALUES: QuoteStatus[] = ['draft', 'sent', 'accepted', 'rejected']
+
 export function AngebotePage() {
   const {
     addQuote,
     deleteQuote,
     duplicateQuote,
     fetchQuoteDetail,
+    updateQuoteStatus,
   } = useApp()
 
   const {
@@ -33,8 +36,27 @@ export function AngebotePage() {
   const [confirmDelete, setConfirmDelete] = useState<Quote | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
   const [isDuplicating, setIsDuplicating] = useState(false)
-  const [quoteSearch, setQuoteSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState<QuoteStatus | 'all'>('all')
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState<Record<string, boolean>>({})
+  const [quoteSearch, setQuoteSearch] = useState(() => searchParams.get('search') ?? '')
+  const [statusFilter, setStatusFilter] = useState<QuoteStatus | 'all'>(() => {
+    const s = searchParams.get('status')
+    return STATUS_VALUES.includes(s as QuoteStatus) ? (s as QuoteStatus) : 'all'
+  })
+
+  // Persist search/status filters in URL for deep-linking.
+  useEffect(() => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        if (quoteSearch.trim()) next.set('search', quoteSearch.trim())
+        else next.delete('search')
+        if (statusFilter !== 'all') next.set('status', statusFilter)
+        else next.delete('status')
+        return next
+      },
+      { replace: true },
+    )
+  }, [quoteSearch, statusFilter, setSearchParams])
 
   const filteredQuotes = useMemo(
     () => filterQuotes(quotes, { search: quoteSearch, status: statusFilter }),
@@ -96,6 +118,21 @@ export function AngebotePage() {
     }
   }, [confirmDelete, deleteQuote, refresh])
 
+  const handleStatusChange = useCallback(
+    async (id: string, newStatus: QuoteStatus) => {
+      setIsUpdatingStatus((prev) => ({ ...prev, [id]: true }))
+      try {
+        await updateQuoteStatus(id, newStatus)
+        const detail = await fetchQuoteDetail(id)
+        setSelectedQuote((prev) => (prev?.id === id ? detail : prev))
+        await refresh()
+      } finally {
+        setIsUpdatingStatus((prev) => ({ ...prev, [id]: false }))
+      }
+    },
+    [updateQuoteStatus, fetchQuoteDetail, refresh],
+  )
+
   if (isLoadingQuotes && quotes.length === 0) {
     return (
       <div className="mx-auto max-w-7xl px-5 py-6 sm:px-8 sm:py-10">
@@ -127,12 +164,14 @@ export function AngebotePage() {
           quoteSearch={quoteSearch}
           statusFilter={statusFilter}
           isDuplicating={isDuplicating}
+          isUpdatingStatus={isUpdatingStatus}
           onSearchChange={setQuoteSearch}
           onStatusFilterChange={setStatusFilter}
           onCreate={handleCreateQuote}
           onOpen={openQuote}
           onDuplicate={handleDuplicateQuote}
           onDelete={setConfirmDelete}
+          onStatusChange={handleStatusChange}
         />
       )}
 

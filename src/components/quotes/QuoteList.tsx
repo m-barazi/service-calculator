@@ -1,5 +1,6 @@
-import { FileText, Plus, Search, X, Copy, Trash2, FolderKanban } from 'lucide-react'
-import { formatDate } from '../../lib/format'
+import { useState } from 'react'
+import { FileText, Plus, Search, X, Copy, Trash2, FolderKanban, ChevronDown } from 'lucide-react'
+import { formatDate, formatEUR } from '../../lib/format'
 import { STATUS_MAP, STATUS_OPTIONS } from './status'
 import { FilterChip } from './FilterChip'
 import type { Quote, QuoteStatus } from '../../types'
@@ -10,12 +11,14 @@ interface QuoteListProps {
   quoteSearch: string
   statusFilter: QuoteStatus | 'all'
   isDuplicating: boolean
+  isUpdatingStatus: Record<string, boolean>
   onSearchChange: (v: string) => void
   onStatusFilterChange: (v: QuoteStatus | 'all') => void
   onCreate: () => void
   onOpen: (id: string) => void
   onDuplicate: (id: string) => void
   onDelete: (quote: Quote) => void
+  onStatusChange: (id: string, status: QuoteStatus) => void
 }
 
 export function QuoteList({
@@ -24,12 +27,14 @@ export function QuoteList({
   quoteSearch,
   statusFilter,
   isDuplicating,
+  isUpdatingStatus,
   onSearchChange,
   onStatusFilterChange,
   onCreate,
   onOpen,
   onDuplicate,
   onDelete,
+  onStatusChange,
 }: QuoteListProps) {
   return (
     <div className="mx-auto max-w-7xl px-5 py-6 sm:px-8 sm:py-10">
@@ -120,7 +125,7 @@ export function QuoteList({
             return (
               <div
                 key={quote.id}
-                className="card group flex flex-col gap-3 p-5 text-left transition hover:border-ink-faint"
+                className="card group flex flex-col gap-3 p-5 text-left transition hover:border-border-strong"
               >
                 <button
                   onClick={() => onOpen(quote.id)}
@@ -157,28 +162,49 @@ export function QuoteList({
                     {formatDate(quote.createdAt)}
                   </p>
                 </button>
-                <div className="flex items-center justify-end gap-1 border-t border-border pt-3">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      onDuplicate(quote.id)
-                    }}
-                    disabled={isDuplicating}
-                    className="qty-btn"
-                    title="Duplizieren"
-                  >
-                    <Copy className="h-3.5 w-3.5" />
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      onDelete(quote)
-                    }}
-                    className="qty-btn text-danger hover:bg-danger/10"
-                    title="Löschen"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
+                <div className="mt-auto flex items-center justify-between border-t border-border pt-3">
+                  <div className="relative">
+                    <select
+                      value={quote.status}
+                      onChange={(e) => {
+                        e.stopPropagation()
+                        onStatusChange(quote.id, e.target.value as QuoteStatus)
+                      }}
+                      disabled={isUpdatingStatus[quote.id]}
+                      className="appearance-none rounded-full border border-border bg-surface py-1 pl-2.5 pr-7 text-2xs font-medium text-ink-soft transition hover:border-border-strong hover:text-ink disabled:opacity-60"
+                    >
+                      {STATUS_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3 w-3 -translate-y-1/2 text-ink-muted" />
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="num text-sm font-semibold text-ink">
+                      {formatEUR(quote.totalGross ?? 0)}
+                    </span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onDuplicate(quote.id)
+                      }}
+                      disabled={isDuplicating}
+                      className="qty-btn"
+                      title="Duplizieren"
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onDelete(quote)
+                      }}
+                      className="qty-btn text-danger hover:bg-danger/10"
+                      title="Löschen"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                 </div>
               </div>
             )
