@@ -398,6 +398,22 @@ export async function createQuote(quote: Omit<Quote, 'id' | 'createdAt' | 'updat
   return toCamelQuote(data)
 }
 
+export async function createQuoteWithItems(
+  quote: Omit<Quote, 'id' | 'createdAt' | 'updatedAt'>,
+  items: Omit<QuoteItem, 'id' | 'quoteId' | 'createdAt' | 'updatedAt'>[],
+): Promise<QuoteWithItems> {
+  const res = await fetch(`${API_URL}/quotes/with-items`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...quote, items }),
+  })
+  if (!res.ok) throw new Error(await extractError(res, 'Angebot konnte nicht erstellt werden'))
+  const data = await res.json()
+  const quoteWithItems = toCamelQuote(data) as QuoteWithItems
+  quoteWithItems.items = (data.items ?? []).map(toCamelQuoteItem)
+  return quoteWithItems
+}
+
 export async function updateQuote(id: string, patch: Partial<Quote>): Promise<Quote> {
   const res = await fetch(`${API_URL}/quotes/${id}`, {
     method: 'PUT',

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Eye, EyeOff, GripVertical, HelpCircle, Search, X } from 'lucide-react'
 import type { CartDiscountType, Category } from '../types'
 
@@ -45,6 +45,20 @@ export function CalculatorPage() {
   const [orderedCategories, setOrderedCategories] = useState<Category[] | null>(null)
   const [draggingCategoryId, setDraggingCategoryId] = useState<string | null>(null)
   const [dragOverCategoryId, setDragOverCategoryId] = useState<string | null>(null)
+
+  // Stable row action handlers (prevent every ServiceRow re-rendering on parent updates)
+  const handleChangeQuantity = useCallback((id: string, q: number) => setQuantity(id, q), [setQuantity])
+  const handleChangeNote = useCallback((id: string, note: string) => setNote(id, note), [setNote])
+  const handleChangeUnitPrice = useCallback(
+    (id: string, price: number | undefined) => {
+      const service = services.find((s) => s.id === id)
+      if (!service) return
+      if (price === undefined || price === service.salePrice) resetCartPrice(id)
+      else setUnitPrice(id, price)
+    },
+    [services, resetCartPrice, setUnitPrice],
+  )
+  const handleSelectService = useCallback((id: string) => setProductDetailsId(id), [])
 
   // Visible services first, then by category
   const visibleServices = useMemo(
@@ -115,6 +129,15 @@ export function CalculatorPage() {
     [cartItems, services, settings.vatRate, cartDiscountType, cartDiscountValue],
   )
 
+  // Keep mutable refs to the latest state/action values so the global keydown
+  // listener only needs to be registered once.
+  const cartRef = useRef(cart)
+  const searchRefValue = useRef(search)
+  useEffect(() => {
+    cartRef.current = cart
+    searchRefValue.current = search
+  }, [cart, search])
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement
@@ -136,7 +159,7 @@ export function CalculatorPage() {
       }
 
       if (e.key === 'Escape') {
-        if (search) {
+        if (searchRefValue.current) {
           e.preventDefault()
           setSearch('')
           setActiveCategory(null)
@@ -146,13 +169,13 @@ export function CalculatorPage() {
 
       if ((e.ctrlKey || e.metaKey) && e.key === 'Backspace') {
         e.preventDefault()
-        if (Object.keys(cart).length > 0) clearCart()
+        if (Object.keys(cartRef.current).length > 0) clearCart()
         return
       }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [cart, clearCart, search])
+  }, [clearCart])
 
   return (
     <div className="mx-auto max-w-7xl px-5 py-6 sm:px-8 sm:py-10">
@@ -319,18 +342,15 @@ export function CalculatorPage() {
                           service={s}
                           quantity={cart[s.id]?.quantity ?? 0}
                           unitPrice={cart[s.id]?.unitPrice}
-                          onChangeQuantity={(q) => setQuantity(s.id, q)}
-                          onChangeUnitPrice={(price) => {
-                            if (price === undefined || price === s.salePrice) resetCartPrice(s.id)
-                            else setUnitPrice(s.id, price)
-                          }}
+                          onChangeQuantity={handleChangeQuantity}
+                          onChangeUnitPrice={handleChangeUnitPrice}
                           showPrices={showPrices}
                           categoryName={cat.name}
                           categoryColor={cat.color}
                           categoryIcon={cat.icon}
                           note={cart[s.id]?.note ?? ''}
-                          onChangeNote={(note) => setNote(s.id, note)}
-                          onSelect={() => setProductDetailsId(s.id)}
+                          onChangeNote={handleChangeNote}
+                          onSelect={handleSelectService}
                         />
                       ))}
                     </div>
@@ -498,3 +518,5 @@ function CategoryChip({
     </button>
   )
 }
+
+export default CalculatorPage

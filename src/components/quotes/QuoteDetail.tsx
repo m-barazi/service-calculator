@@ -174,6 +174,19 @@ export function QuoteDetail({
     [q, updateItem, refreshSelected],
   )
 
+  const handleBlurQuantity = useCallback(
+    (itemId: string, val: string) => handleItemBlur(itemId, 'quantity', val),
+    [handleItemBlur],
+  )
+  const handleBlurPrice = useCallback(
+    (itemId: string, val: string) => handleItemBlur(itemId, 'unitPrice', val),
+    [handleItemBlur],
+  )
+  const handleBlurPurchasePrice = useCallback(
+    (itemId: string, val: string) => handleItemBlur(itemId, 'purchasePrice', val),
+    [handleItemBlur],
+  )
+
   const handlePdf = useCallback(
     (mode: 'customer' | 'internal') => {
       generateQuotePdf(q, totals, settings, { mode, showProfit: mode === 'internal' })
@@ -276,10 +289,10 @@ export function QuoteDetail({
                 <ItemRow
                   key={item.id}
                   item={item}
-                  onDelete={() => handleDeleteItem(item.id)}
-                  onBlurQuantity={(val) => handleItemBlur(item.id, 'quantity', val)}
-                  onBlurPrice={(val) => handleItemBlur(item.id, 'unitPrice', val)}
-                  onBlurPurchasePrice={item.service ? (val) => handleItemBlur(item.id, 'purchasePrice', val) : undefined}
+                  onDelete={handleDeleteItem}
+                  onBlurQuantity={handleBlurQuantity}
+                  onBlurPrice={handleBlurPrice}
+                  onBlurPurchasePrice={item.service ? handleBlurPurchasePrice : undefined}
                 />
               ))}
             </div>

@@ -139,3 +139,5 @@ export function AngebotePage() {
     </>
   )
 }
+
+export default AngebotePage

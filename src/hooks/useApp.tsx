@@ -40,6 +40,7 @@ import {
   fetchProjectQuotes,
   fetchQuotes,
   createQuote as createQuoteApi,
+  createQuoteWithItems as createQuoteWithItemsApi,
   updateQuote as updateQuoteApi,
   deleteQuote as deleteQuoteApi,
   duplicateQuote as duplicateQuoteApi,
@@ -699,19 +700,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const createQuoteFromCart = useCallback(
     async (title: string, customerId?: string, projectId?: string) => {
       try {
-        const created = await createQuoteApi({
-          title,
-          customerId,
-          projectId,
-          status: 'draft',
-          discountValue: 0,
-        })
         const items = buildCartQuoteItems(cart, services)
-        for (const item of items) {
-          await addQuoteItemApi(created.id, item)
-        }
+        const detail = await createQuoteWithItemsApi(
+          {
+            title,
+            customerId,
+            projectId,
+            status: 'draft',
+            discountValue: 0,
+          },
+          items,
+        )
         clearCart()
-        const detail = await fetchQuoteApi(created.id)
         setQuotes((prev) => [detail, ...prev])
         toast.success('Angebot aus Warenkorb erstellt')
         void refreshDashboard()
@@ -721,7 +721,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         throw error
       }
     },
-    [cart, services, createQuoteApi, addQuoteItemApi, fetchQuoteApi, clearCart, handleError, toast, refreshDashboard],
+    [cart, services, createQuoteWithItemsApi, clearCart, handleError, toast, refreshDashboard],
   )
 
   // ---- Cart operations ----
@@ -785,6 +785,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       serviceId,
       quantity: entry.quantity,
       note: entry.note,
+      unitPrice: entry.unitPrice,
     }))
     const now = new Date().toISOString()
     const template: CartTemplate = {
@@ -807,12 +808,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       toast.error('Vorlage enthält keine gültigen Leistungen mehr')
       return
     }
-    const next: Record<string, { quantity: number; note: string }> =
+    const next: Record<string, CartEntry> =
       mode === 'replace' ? {} : { ...cart }
     for (const item of validItems) {
       next[item.serviceId] = {
         quantity: Math.max(1, item.quantity),
         note: item.note ?? '',
+        unitPrice: item.unitPrice,
       }
     }
     setCart(next)

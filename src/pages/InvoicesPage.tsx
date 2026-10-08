@@ -471,3 +471,5 @@ export function InvoicesPage() {
     </div>
   )
 }
+
+export default InvoicesPage

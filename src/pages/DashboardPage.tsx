@@ -269,3 +269,5 @@ function KpiCard({
     </div>
   )
 }
+
+export default DashboardPage

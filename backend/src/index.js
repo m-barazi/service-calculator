@@ -3,6 +3,25 @@ import cors from 'cors';
 import { Pool } from 'pg';
 import dotenv from 'dotenv';
 import { buildDashboardData } from './dashboard.js';
+import {
+  validateBody,
+  serviceCreateSchema,
+  serviceUpdateSchema,
+  categoryCreateSchema,
+  categoryUpdateSchema,
+  categoryReorderSchema,
+  customerCreateSchema,
+  customerUpdateSchema,
+  projectCreateSchema,
+  projectUpdateSchema,
+  quoteCreateSchema,
+  quoteWithItemsSchema,
+  quoteUpdateSchema,
+  quoteStatusSchema,
+  quoteItemCreateSchema,
+  quoteItemUpdateSchema,
+  invoiceUpdateSchema,
+} from './validation.js';
 
 dotenv.config();
 
@@ -17,8 +36,13 @@ const pool = new Pool({
   password: process.env.DB_PASSWORD || 'postgres',
 });
 
-app.use(cors());
-app.use(express.json());
+// CORS: allow configured frontend origin; fall back to any origin only in development.
+const FRONTEND_URL = process.env.FRONTEND_URL || (process.env.NODE_ENV === 'production' ? null : '*');
+const corsOptions = FRONTEND_URL && FRONTEND_URL !== '*'
+  ? { origin: FRONTEND_URL, credentials: true }
+  : { origin: true };
+app.use(cors(corsOptions));
+app.use(express.json({ limit: '100kb' }));
 
 function toCamel(row) {
   return {
@@ -151,7 +175,7 @@ app.get('/api/services/:id', async (req, res) => {
   }
 });
 
-app.post('/api/services', async (req, res) => {
+app.post('/api/services', validateBody(serviceCreateSchema), async (req, res) => {
   try {
     const { name, categoryId, purchasePrice, salePrice, defaultQuantity, url, note, visible, pinned } = req.body;
     const result = await pool.query(
@@ -167,7 +191,7 @@ app.post('/api/services', async (req, res) => {
   }
 });
 
-app.put('/api/services/:id', async (req, res) => {
+app.put('/api/services/:id', validateBody(serviceUpdateSchema), async (req, res) => {
   try {
     const { id } = req.params;
     const { name, categoryId, purchasePrice, salePrice, defaultQuantity, url, note, visible, pinned } = req.body;
@@ -243,7 +267,7 @@ app.get('/api/categories/:id', async (req, res) => {
   }
 });
 
-app.post('/api/categories', async (req, res) => {
+app.post('/api/categories', validateBody(categoryCreateSchema), async (req, res) => {
   try {
     const { name, description, icon, color, sortOrder, visible } = req.body;
     if (!name) {
@@ -262,7 +286,7 @@ app.post('/api/categories', async (req, res) => {
   }
 });
 
-app.put('/api/categories/:id', async (req, res) => {
+app.put('/api/categories/:id', validateBody(categoryUpdateSchema), async (req, res) => {
   try {
     const { id } = req.params;
     const { name, description, icon, color, sortOrder, visible } = req.body;
@@ -295,7 +319,7 @@ app.put('/api/categories/:id', async (req, res) => {
   }
 });
 
-app.post('/api/categories/reorder', async (req, res) => {
+app.post('/api/categories/reorder', validateBody(categoryReorderSchema), async (req, res) => {
   try {
     const { ids } = req.body;
     if (!Array.isArray(ids) || ids.length === 0) {
@@ -351,7 +375,7 @@ app.get('/api/customers/:id', async (req, res) => {
   }
 });
 
-app.post('/api/customers', async (req, res) => {
+app.post('/api/customers', validateBody(customerCreateSchema), async (req, res) => {
   try {
     const { name, email, phone, street, zip, city, country, notes } = req.body;
     if (!name) {
@@ -370,7 +394,7 @@ app.post('/api/customers', async (req, res) => {
   }
 });
 
-app.put('/api/customers/:id', async (req, res) => {
+app.put('/api/customers/:id', validateBody(customerUpdateSchema), async (req, res) => {
   try {
     const { id } = req.params;
     const { name, email, phone, street, zip, city, country, notes } = req.body;
@@ -479,7 +503,7 @@ app.get('/api/projects/:id', async (req, res) => {
   }
 });
 
-app.post('/api/projects', async (req, res) => {
+app.post('/api/projects', validateBody(projectCreateSchema), async (req, res) => {
   try {
     const { name, customerId, description, status } = req.body;
     if (!name) {
@@ -500,7 +524,7 @@ app.post('/api/projects', async (req, res) => {
   }
 });
 
-app.put('/api/projects/:id', async (req, res) => {
+app.put('/api/projects/:id', validateBody(projectUpdateSchema), async (req, res) => {
   try {
     const { id } = req.params;
     const { name, customerId, description, status } = req.body;
@@ -669,38 +693,16 @@ app.get('/api/quotes/:id', async (req, res) => {
 
 async function generateQuoteNumber() {
   const year = new Date().getFullYear();
-  const prefix = `AN-${year}-`;
-  const result = await pool.query(
-    `SELECT quote_number FROM quotes WHERE quote_number LIKE $1 ORDER BY quote_number DESC LIMIT 1`,
-    [`${prefix}%`]
-  );
-  let next = 1;
-  if (result.rows.length > 0) {
-    const last = result.rows[0].quote_number;
-    const match = last.match(/-(\d+)$/);
-    if (match) {
-      next = parseInt(match[1], 10) + 1;
-    }
-  }
-  return `${prefix}${String(next).padStart(4, '0')}`;
+  const result = await pool.query(`SELECT nextval('quote_number_seq') AS n`);
+  const next = parseInt(result.rows[0].n, 10);
+  return `AN-${year}-${String(next).padStart(4, '0')}`;
 }
 
 async function generateInvoiceNumber() {
   const year = new Date().getFullYear();
-  const prefix = `RE-${year}-`;
-  const result = await pool.query(
-    `SELECT invoice_number FROM invoices WHERE invoice_number LIKE $1 ORDER BY invoice_number DESC LIMIT 1`,
-    [`${prefix}%`]
-  );
-  let next = 1;
-  if (result.rows.length > 0) {
-    const last = result.rows[0].invoice_number;
-    const match = last.match(/-(\d+)$/);
-    if (match) {
-      next = parseInt(match[1], 10) + 1;
-    }
-  }
-  return `${prefix}${String(next).padStart(4, '0')}`;
+  const result = await pool.query(`SELECT nextval('invoice_number_seq') AS n`);
+  const next = parseInt(result.rows[0].n, 10);
+  return `RE-${year}-${String(next).padStart(4, '0')}`;
 }
 
 async function computeQuoteTotalsForInvoice(quoteId, vatRate) {
@@ -729,7 +731,7 @@ async function computeQuoteTotalsForInvoice(quoteId, vatRate) {
   return { totalNet, totalGross };
 }
 
-app.post('/api/quotes', async (req, res) => {
+app.post('/api/quotes', validateBody(quoteCreateSchema), async (req, res) => {
   try {
     const { title, customerId, customerName, projectId, status, discountType, discountValue, notes, validUntil } = req.body;
     if (!title) {
@@ -749,7 +751,73 @@ app.post('/api/quotes', async (req, res) => {
   }
 });
 
-app.put('/api/quotes/:id', async (req, res) => {
+// Create a quote together with its items in a single atomic transaction.
+app.post('/api/quotes/with-items', validateBody(quoteWithItemsSchema), async (req, res) => {
+  try {
+    const { title, customerId, customerName, projectId, status, discountType, discountValue, notes, validUntil, items } = req.body;
+    if (!title) {
+      return res.status(400).json({ error: 'Title is required' });
+    }
+    if (!Array.isArray(items)) {
+      return res.status(400).json({ error: 'items must be an array' });
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const quoteNumber = await generateQuoteNumber();
+      const quoteResult = await client.query(
+        `INSERT INTO quotes (quote_number, title, customer_id, customer_name, project_id, status, discount_type, discount_value, notes, valid_until, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())
+         RETURNING *`,
+        [quoteNumber, title, customerId || null, customerName || null, projectId || null, status || 'draft', discountType || null, discountValue ?? 0, notes || null, validUntil || null]
+      );
+      const quote = quoteResult.rows[0];
+
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        let effectivePurchasePrice = item.purchasePrice ?? null;
+        if (effectivePurchasePrice == null && item.serviceId) {
+          const serviceResult = await client.query('SELECT purchase_price FROM services WHERE id = $1', [item.serviceId]);
+          if (serviceResult.rows.length > 0) {
+            effectivePurchasePrice = serviceResult.rows[0].purchase_price;
+          }
+        }
+        await client.query(
+          `INSERT INTO quote_items (quote_id, service_id, custom_name, custom_note, quantity, unit_price, purchase_price, sort_order, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())`,
+          [quote.id, item.serviceId || null, item.customName || null, item.customNote || null, item.quantity ?? 1, item.unitPrice ?? 0, effectivePurchasePrice, item.sortOrder ?? i]
+        );
+      }
+
+      await client.query('COMMIT');
+
+      const itemsResult = await pool.query(
+        `SELECT qi.*, s.name as service_name, s.purchase_price as service_purchase_price,
+                s.sale_price as service_sale_price, s.category_id as service_category_id
+         FROM quote_items qi
+         LEFT JOIN services s ON qi.service_id = s.id
+         WHERE qi.quote_id = $1
+         ORDER BY qi.sort_order, qi.created_at`,
+        [quote.id]
+      );
+
+      const fullQuote = toCamelQuote(quote);
+      fullQuote.items = itemsResult.rows.map(toCamelQuoteItem);
+      res.status(201).json(fullQuote);
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('Error creating quote with items:', error);
+    res.status(500).json({ error: 'Failed to create quote' });
+  }
+});
+
+app.put('/api/quotes/:id', validateBody(quoteUpdateSchema), async (req, res) => {
   try {
     const { id } = req.params;
     const { title, customerId, customerName, projectId, status, discountType, discountValue, notes, validUntil } = req.body;
@@ -821,7 +889,7 @@ app.get('/api/quotes/:id/history', async (req, res) => {
   }
 });
 
-app.post('/api/quotes/:id/status', async (req, res) => {
+app.post('/api/quotes/:id/status', validateBody(quoteStatusSchema), async (req, res) => {
   try {
     const { id } = req.params;
     const { status, changedBy } = req.body;
@@ -941,7 +1009,7 @@ app.post('/api/quotes/:id/duplicate', async (req, res) => {
 
 // Quote items
 
-app.post('/api/quotes/:id/items', async (req, res) => {
+app.post('/api/quotes/:id/items', validateBody(quoteItemCreateSchema), async (req, res) => {
   try {
     const { id } = req.params;
     const { serviceId, customName, customNote, quantity, unitPrice, purchasePrice, sortOrder } = req.body;
@@ -981,7 +1049,7 @@ app.post('/api/quotes/:id/items', async (req, res) => {
   }
 });
 
-app.put('/api/quotes/:id/items/:itemId', async (req, res) => {
+app.put('/api/quotes/:id/items/:itemId', validateBody(quoteItemUpdateSchema), async (req, res) => {
   try {
     const { id, itemId } = req.params;
     const { serviceId, customName, customNote, quantity, unitPrice, purchasePrice, sortOrder } = req.body;
@@ -1102,20 +1170,16 @@ app.get('/api/invoices/:id', async (req, res) => {
     }
     const invoice = toCamelInvoice(invoiceResult.rows[0]);
 
-    // Include items from linked quote if available
-    if (invoice.quoteId) {
-      const itemsResult = await pool.query(`
-        SELECT qi.*, s.name as service_name, s.purchase_price as service_purchase_price,
-               s.sale_price as service_sale_price, s.category_id as service_category_id
-        FROM quote_items qi
-        LEFT JOIN services s ON qi.service_id = s.id
-        WHERE qi.quote_id = $1
-        ORDER BY qi.sort_order, qi.created_at
-      `, [invoice.quoteId]);
-      invoice.items = itemsResult.rows.map(toCamelQuoteItem);
-    } else {
-      invoice.items = [];
-    }
+    // Invoice items are an immutable snapshot, independent of later quote changes
+    const itemsResult = await pool.query(`
+      SELECT ii.*, s.name as service_name, s.purchase_price as service_purchase_price,
+             s.sale_price as service_sale_price, s.category_id as service_category_id
+      FROM invoice_items ii
+      LEFT JOIN services s ON ii.service_id = s.id
+      WHERE ii.invoice_id = $1
+      ORDER BY ii.sort_order, ii.created_at
+    `, [id]);
+    invoice.items = itemsResult.rows.map(toCamelQuoteItem);
 
     res.json(invoice);
   } catch (error) {
@@ -1125,53 +1189,85 @@ app.get('/api/invoices/:id', async (req, res) => {
 });
 
 app.post('/api/quotes/:id/invoice', async (req, res) => {
+  const client = await pool.connect();
   try {
     const { id } = req.params;
     const vatRate = parseFloat(req.body.vatRate) || 0.19;
 
-    const quoteResult = await pool.query(`
+    await client.query('BEGIN');
+
+    const quoteResult = await client.query(`
       SELECT q.*, c.name as customer_name
       FROM quotes q
       LEFT JOIN customers c ON q.customer_id = c.id
       WHERE q.id = $1
+      FOR UPDATE
     `, [id]);
     if (quoteResult.rows.length === 0) {
+      await client.query('ROLLBACK');
       return res.status(404).json({ error: 'Quote not found' });
     }
     const quote = quoteResult.rows[0];
     if (quote.status !== 'accepted') {
+      await client.query('ROLLBACK');
       return res.status(400).json({ error: 'Invoice can only be created from accepted quotes' });
     }
 
-    const existing = await pool.query('SELECT id FROM invoices WHERE quote_id = $1 LIMIT 1', [id]);
+    const existing = await client.query('SELECT id FROM invoices WHERE quote_id = $1 LIMIT 1', [id]);
     if (existing.rows.length > 0) {
+      await client.query('ROLLBACK');
       return res.status(409).json({ error: 'Invoice already exists for this quote' });
     }
 
     const totals = await computeQuoteTotalsForInvoice(id, vatRate);
     if (!totals) {
+      await client.query('ROLLBACK');
       return res.status(500).json({ error: 'Failed to compute invoice totals' });
     }
 
     const invoiceNumber = await generateInvoiceNumber();
     const title = `Rechnung zu ${quote.title}`;
-    const result = await pool.query(
+    const invoiceResult = await client.query(
       `INSERT INTO invoices (invoice_number, quote_id, project_id, customer_id, customer_name, title, status, total_net, total_gross, notes, created_at, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())
        RETURNING *`,
       [invoiceNumber, id, quote.project_id, quote.customer_id, quote.customer_name, title, 'draft', totals.totalNet, totals.totalGross, quote.notes || null]
     );
+    const invoice = invoiceResult.rows[0];
 
-    const invoice = toCamelInvoice(result.rows[0]);
-    invoice.items = [];
-    res.status(201).json(invoice);
+    // Snapshot quote items into invoice_items so later quote edits cannot alter the invoice
+    await client.query(`
+      INSERT INTO invoice_items (invoice_id, service_id, custom_name, custom_note, quantity, unit_price, purchase_price, sort_order, created_at, updated_at)
+      SELECT $1, qi.service_id, qi.custom_name, qi.custom_note, qi.quantity, qi.unit_price, qi.purchase_price, qi.sort_order, qi.created_at, qi.updated_at
+      FROM quote_items qi
+      WHERE qi.quote_id = $2
+      ORDER BY qi.sort_order, qi.created_at
+    `, [invoice.id, id]);
+
+    await client.query('COMMIT');
+
+    const itemsResult = await pool.query(`
+      SELECT ii.*, s.name as service_name, s.purchase_price as service_purchase_price,
+             s.sale_price as service_sale_price, s.category_id as service_category_id
+      FROM invoice_items ii
+      LEFT JOIN services s ON ii.service_id = s.id
+      WHERE ii.invoice_id = $1
+      ORDER BY ii.sort_order, ii.created_at
+    `, [invoice.id]);
+
+    const fullInvoice = toCamelInvoice(invoice);
+    fullInvoice.items = itemsResult.rows.map(toCamelQuoteItem);
+    res.status(201).json(fullInvoice);
   } catch (error) {
+    await client.query('ROLLBACK');
     console.error('Error creating invoice:', error);
     res.status(500).json({ error: 'Failed to create invoice' });
+  } finally {
+    client.release();
   }
 });
 
-app.put('/api/invoices/:id', async (req, res) => {
+app.put('/api/invoices/:id', validateBody(invoiceUpdateSchema), async (req, res) => {
   try {
     const { id } = req.params;
     const { status, dueDate, paidAt, notes } = req.body;
@@ -1557,6 +1653,59 @@ async function ensureTables() {
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_invoices_status ON invoices(status)`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_invoices_quote ON invoices(quote_id)`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_invoices_created ON invoices(created_at DESC)`);
+
+  // Ensure a quote can only have one invoice
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_invoices_unique_quote
+    ON invoices(quote_id)
+    WHERE quote_id IS NOT NULL
+  `);
+
+  // Invoice items table — immutable snapshot of the billed positions
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS invoice_items (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      invoice_id UUID NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
+      service_id UUID REFERENCES services(id) ON DELETE SET NULL,
+      custom_name TEXT,
+      custom_note TEXT,
+      quantity NUMERIC NOT NULL DEFAULT 1,
+      unit_price NUMERIC NOT NULL DEFAULT 0,
+      purchase_price NUMERIC,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_invoice_items_invoice ON invoice_items(invoice_id, sort_order)`);
+
+  // Migration: backfill invoice_items from linked quote_items for existing invoices
+  await pool.query(`
+    INSERT INTO invoice_items (invoice_id, service_id, custom_name, custom_note, quantity, unit_price, purchase_price, sort_order, created_at, updated_at)
+    SELECT i.id, qi.service_id, qi.custom_name, qi.custom_note, qi.quantity, qi.unit_price, qi.purchase_price, qi.sort_order, qi.created_at, qi.updated_at
+    FROM invoices i
+    JOIN quote_items qi ON i.quote_id = qi.quote_id
+    WHERE NOT EXISTS (
+      SELECT 1 FROM invoice_items ii WHERE ii.invoice_id = i.id
+    )
+  `);
+
+  // Atomic sequence-based number generators to avoid race conditions
+  await pool.query(`CREATE SEQUENCE IF NOT EXISTS quote_number_seq START 1`);
+  await pool.query(`
+    SELECT setval('quote_number_seq', GREATEST(
+      COALESCE((SELECT last_value FROM quote_number_seq), 0),
+      COALESCE((SELECT MAX(CAST(SUBSTRING(quote_number FROM '-([0-9]+)$') AS INTEGER)) FROM quotes WHERE quote_number LIKE 'AN-%'), 0)
+    ), true)
+  `);
+
+  await pool.query(`CREATE SEQUENCE IF NOT EXISTS invoice_number_seq START 1`);
+  await pool.query(`
+    SELECT setval('invoice_number_seq', GREATEST(
+      COALESCE((SELECT last_value FROM invoice_number_seq), 0),
+      COALESCE((SELECT MAX(CAST(SUBSTRING(invoice_number FROM '-([0-9]+)$') AS INTEGER)) FROM invoices WHERE invoice_number LIKE 'RE-%'), 0)
+    ), true)
+  `);
 
   console.log('Database tables ensured');
 }

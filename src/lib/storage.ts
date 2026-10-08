@@ -1,4 +1,4 @@
-import type { CartEntry, CartItem, Category, Service, Settings } from '../types'
+import type { CartEntry, CartItem, CartTemplate, Category, Service, Settings } from '../types'
 
 const KEYS = {
   settings: 'sc.settings.v1',
@@ -69,14 +69,6 @@ export function saveCart(cart: Record<string, CartEntry>): void {
 }
 
 // ===== Cart templates =====
-
-export interface CartTemplate {
-  id: string
-  name: string
-  items: CartItem[]
-  createdAt: string
-  updatedAt: string
-}
 
 export function loadTemplates(): CartTemplate[] {
   try {

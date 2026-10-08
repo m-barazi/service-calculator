@@ -204,3 +204,5 @@ function CustomerCard({
     </div>
   )
 }
+
+export default CustomersPage

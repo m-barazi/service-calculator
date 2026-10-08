@@ -38,10 +38,10 @@ export interface CartItem {
   serviceId: string
   quantity: number
   note: string
+  unitPrice?: number
 }
 
 export interface CartItemWithPrice extends CartItem {
-  unitPrice?: number
   purchasePrice?: number
 }
 

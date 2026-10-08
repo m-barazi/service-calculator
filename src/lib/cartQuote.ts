@@ -38,5 +38,6 @@ export function cartToItems(cart: CartMap): CartItem[] {
     serviceId,
     quantity: entry.quantity,
     note: entry.note,
+    unitPrice: entry.unitPrice,
   }))
 }

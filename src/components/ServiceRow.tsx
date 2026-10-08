@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { memo, useCallback, useEffect, useState } from 'react'
 import { ExternalLink, FileText, Pin, RotateCcw, StickyNote } from 'lucide-react'
 import type { Service } from '../types'
 import { formatEUR, formatPriceInput, parseGermanNumber } from '../lib/format'
@@ -8,18 +8,18 @@ interface ServiceRowProps {
   service: Service
   quantity: number
   unitPrice?: number
-  onChangeQuantity: (q: number) => void
-  onChangeUnitPrice?: (unitPrice: number | undefined) => void
+  onChangeQuantity: (serviceId: string, q: number) => void
+  onChangeUnitPrice?: (serviceId: string, unitPrice: number | undefined) => void
   showPrices: boolean
   categoryName?: string
   categoryColor?: string
   categoryIcon?: string
   note?: string
-  onChangeNote?: (note: string) => void
-  onSelect?: () => void
+  onChangeNote?: (serviceId: string, note: string) => void
+  onSelect?: (serviceId: string) => void
 }
 
-export function ServiceRow({
+function ServiceRowRaw({
   service,
   quantity,
   unitPrice,
@@ -40,26 +40,55 @@ export function ServiceRow({
   const lineTotal = effectivePrice * quantity
   const isPriceOverridden = unitPrice !== undefined && unitPrice !== service.salePrice
 
-  const handlePriceBlur = () => {
-    const parsed = parseGermanNumber(priceInput)
-    if (!parsed || parsed === service.salePrice) {
-      onChangeUnitPrice?.(undefined)
+  // Keep the inline price input in sync with external changes (e.g. reset via modal)
+  useEffect(() => {
+    setPriceInput(formatPriceInput(effectivePrice))
+  }, [effectivePrice])
+
+  const handlePriceBlur = useCallback(() => {
+    const raw = priceInput.trim()
+    if (raw === '') {
+      onChangeUnitPrice?.(service.id, undefined)
       setPriceInput(formatPriceInput(service.salePrice))
       return
     }
-    onChangeUnitPrice?.(parsed)
+    const parsed = parseGermanNumber(raw)
+    if (parsed === service.salePrice) {
+      onChangeUnitPrice?.(service.id, undefined)
+      setPriceInput(formatPriceInput(service.salePrice))
+      return
+    }
+    onChangeUnitPrice?.(service.id, parsed)
     setPriceInput(formatPriceInput(parsed))
-  }
+  }, [priceInput, service.id, service.salePrice, onChangeUnitPrice])
 
-  const resetPrice = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    onChangeUnitPrice?.(undefined)
-    setPriceInput(formatPriceInput(service.salePrice))
-  }
+  const resetPrice = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation()
+      onChangeUnitPrice?.(service.id, undefined)
+      setPriceInput(formatPriceInput(service.salePrice))
+    },
+    [service.id, service.salePrice, onChangeUnitPrice],
+  )
+
+  const handleSelect = useCallback(
+    () => onSelect?.(service.id),
+    [service.id, onSelect],
+  )
+
+  const handleQuantityChange = useCallback(
+    (q: number) => onChangeQuantity(service.id, q),
+    [service.id, onChangeQuantity],
+  )
+
+  const handleNoteChange = useCallback(
+    (note: string) => onChangeNote?.(service.id, note),
+    [service.id, onChangeNote],
+  )
 
   return (
     <div
-      onClick={() => onSelect?.()}
+      onClick={handleSelect}
       className={[
         'group relative flex flex-col gap-3 rounded-2xl border bg-surface px-4 py-4 transition-all sm:flex-row sm:items-center sm:gap-4 sm:px-5',
         onSelect ? 'cursor-pointer' : '',
@@ -175,7 +204,7 @@ export function ServiceRow({
         className="flex items-center justify-between gap-3 sm:justify-end"
         onClick={(e) => e.stopPropagation()}
       >
-        <QuantityStepper value={quantity} onChange={onChangeQuantity} />
+        <QuantityStepper value={quantity} onChange={handleQuantityChange} />
         <div className="flex flex-col items-end min-w-[100px]">
           <span className="text-2xs uppercase tracking-wider text-ink-muted">
             Summe
@@ -210,7 +239,7 @@ export function ServiceRow({
           <input
             type="text"
             value={note ?? ''}
-            onChange={(e) => onChangeNote?.(e.target.value)}
+            onChange={(e) => handleNoteChange(e.target.value)}
             placeholder="z.B. für mustermax.de"
             maxLength={100}
             className="input flex-1 text-sm"
@@ -231,3 +260,5 @@ export function ServiceRow({
     </div>
   )
 }
+
+export const ServiceRow = memo(ServiceRowRaw)

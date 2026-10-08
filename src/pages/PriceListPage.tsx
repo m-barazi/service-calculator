@@ -485,3 +485,5 @@ function CategoryChip({
     </button>
   )
 }
+
+export default PriceListPage

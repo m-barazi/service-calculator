@@ -544,3 +544,5 @@ function ProjectFormModal({ open, onClose, project, customers, onSave }: Project
     </div>
   )
 }
+
+export default ProjectsPage

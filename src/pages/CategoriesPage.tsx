@@ -390,3 +390,5 @@ function StatCard({ eyebrow, value }: { eyebrow: string; value: string }) {
     </div>
   )
 }
+
+export default CategoriesPage

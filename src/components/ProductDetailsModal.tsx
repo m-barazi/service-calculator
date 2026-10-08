@@ -53,8 +53,14 @@ export function ProductDetailsModal({
   }, [unitPrice, service.salePrice])
 
   const handlePriceBlur = () => {
-    const parsed = parseGermanNumber(priceInput)
-    if (!parsed || parsed === service.salePrice) {
+    const raw = priceInput.trim()
+    if (raw === '') {
+      onChangeUnitPrice?.(undefined)
+      setPriceInput(formatPriceInput(service.salePrice))
+      return
+    }
+    const parsed = parseGermanNumber(raw)
+    if (parsed === service.salePrice) {
       onChangeUnitPrice?.(undefined)
       setPriceInput(formatPriceInput(service.salePrice))
       return

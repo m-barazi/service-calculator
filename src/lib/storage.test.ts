@@ -5,8 +5,8 @@ import {
   loadCart,
   saveCart,
   newTemplateId,
-  type CartTemplate,
 } from './storage'
+import type { CartTemplate } from '../types'
 
 const TEMPLATES_KEY = 'sc.templates.v1'
 
