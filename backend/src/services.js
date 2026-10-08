@@ -3,6 +3,7 @@ import { pool } from './db.js';
 import { toCamel } from './transforms.js';
 import { validateBody, serviceCreateSchema, serviceUpdateSchema } from './validation.js';
 import { parsePagination, buildListResponse } from './pagination.js';
+import { asyncHandler } from './error-handler.js';
 
 export const servicesRouter = Router();
 
@@ -31,8 +32,9 @@ function buildServiceFilters(query) {
   return { whereClause: where.length ? `WHERE ${where.join(' AND ')}` : '', params, idx };
 }
 
-servicesRouter.get('/', async (req, res) => {
-  try {
+servicesRouter.get(
+  '/',
+  asyncHandler(async (req, res) => {
     const wantsPagination = req.query.page !== undefined || req.query.limit !== undefined;
     const { whereClause, params, idx } = buildServiceFilters(req.query);
     const orderBy = 'ORDER BY c.sort_order NULLS LAST, s.pinned DESC, s.name';
@@ -56,14 +58,12 @@ servicesRouter.get('/', async (req, res) => {
       params,
     );
     res.json(result.rows.map(toCamel));
-  } catch (error) {
-    console.error('Error fetching services:', error);
-    res.status(500).json({ error: 'Failed to fetch services' });
-  }
-});
+  }),
+);
 
-servicesRouter.get('/stats', async (req, res) => {
-  try {
+servicesRouter.get(
+  '/stats',
+  asyncHandler(async (req, res) => {
     const [totalResult, visibleResult, categoryResult] = await Promise.all([
       pool.query('SELECT COUNT(*) FROM services'),
       pool.query('SELECT COUNT(*) FROM services WHERE visible = true'),
@@ -81,28 +81,25 @@ servicesRouter.get('/stats', async (req, res) => {
         count: parseInt(row.count),
       })),
     });
-  } catch (error) {
-    console.error('Error fetching service stats:', error);
-    res.status(500).json({ error: 'Failed to fetch service stats' });
-  }
-});
+  }),
+);
 
-servicesRouter.get('/:id', async (req, res) => {
-  try {
+servicesRouter.get(
+  '/:id',
+  asyncHandler(async (req, res) => {
     const { id } = req.params;
     const result = await pool.query('SELECT * FROM services WHERE id = $1', [id]);
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Service not found' });
     }
     res.json(toCamel(result.rows[0]));
-  } catch (error) {
-    console.error('Error fetching service:', error);
-    res.status(500).json({ error: 'Failed to fetch service' });
-  }
-});
+  }),
+);
 
-servicesRouter.post('/', validateBody(serviceCreateSchema), async (req, res) => {
-  try {
+servicesRouter.post(
+  '/',
+  validateBody(serviceCreateSchema),
+  asyncHandler(async (req, res) => {
     const { name, categoryId, purchasePrice, salePrice, defaultQuantity, url, note, visible, pinned } = req.body;
     const result = await pool.query(
       `INSERT INTO services (name, category_id, purchase_price, sale_price, default_quantity, url, note, visible, pinned, created_at, updated_at)
@@ -111,14 +108,13 @@ servicesRouter.post('/', validateBody(serviceCreateSchema), async (req, res) => 
       [name, categoryId, purchasePrice, salePrice, defaultQuantity, url, note, visible ?? true, pinned ?? false],
     );
     res.status(201).json(toCamel(result.rows[0]));
-  } catch (error) {
-    console.error('Error creating service:', error);
-    res.status(500).json({ error: 'Failed to create service' });
-  }
-});
+  }),
+);
 
-servicesRouter.put('/:id', validateBody(serviceUpdateSchema), async (req, res) => {
-  try {
+servicesRouter.put(
+  '/:id',
+  validateBody(serviceUpdateSchema),
+  asyncHandler(async (req, res) => {
     const { id } = req.params;
     const { name, categoryId, purchasePrice, salePrice, defaultQuantity, url, note, visible, pinned } = req.body;
 
@@ -147,22 +143,17 @@ servicesRouter.put('/:id', validateBody(serviceUpdateSchema), async (req, res) =
       return res.status(404).json({ error: 'Service not found' });
     }
     res.json(toCamel(result.rows[0]));
-  } catch (error) {
-    console.error('Error updating service:', error);
-    res.status(500).json({ error: 'Failed to update service' });
-  }
-});
+  }),
+);
 
-servicesRouter.delete('/:id', async (req, res) => {
-  try {
+servicesRouter.delete(
+  '/:id',
+  asyncHandler(async (req, res) => {
     const { id } = req.params;
     const result = await pool.query('DELETE FROM services WHERE id = $1 RETURNING *', [id]);
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Service not found' });
     }
     res.status(204).send();
-  } catch (error) {
-    console.error('Error deleting service:', error);
-    res.status(500).json({ error: 'Failed to delete service' });
-  }
-});
+  }),
+);

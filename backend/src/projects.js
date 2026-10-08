@@ -1,13 +1,15 @@
 import { Router } from 'express';
 import { pool } from './db.js';
-import { toCamelProject, toCamelCustomer } from './transforms.js';
+import { toCamelProject, toCamelQuote } from './transforms.js';
 import { validateBody, projectCreateSchema, projectUpdateSchema } from './validation.js';
 import { parsePagination, buildListResponse } from './pagination.js';
+import { asyncHandler } from './error-handler.js';
 
 export const projectsRouter = Router();
 
-projectsRouter.get('/', async (req, res) => {
-  try {
+projectsRouter.get(
+  '/',
+  asyncHandler(async (req, res) => {
     const wantsPagination = req.query.page !== undefined || req.query.limit !== undefined;
     if (wantsPagination) {
       const { page, limit, offset } = parsePagination(req.query);
@@ -34,14 +36,12 @@ projectsRouter.get('/', async (req, res) => {
       ORDER BY p.created_at DESC
     `);
     res.json(result.rows.map(toCamelProject));
-  } catch (error) {
-    console.error('Error fetching projects:', error);
-    res.status(500).json({ error: 'Failed to fetch projects' });
-  }
-});
+  }),
+);
 
-projectsRouter.get('/:id', async (req, res) => {
-  try {
+projectsRouter.get(
+  '/:id',
+  asyncHandler(async (req, res) => {
     const { id } = req.params;
     const result = await pool.query(`
       SELECT p.*, c.name as customer_name
@@ -53,14 +53,13 @@ projectsRouter.get('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Project not found' });
     }
     res.json(toCamelProject(result.rows[0]));
-  } catch (error) {
-    console.error('Error fetching project:', error);
-    res.status(500).json({ error: 'Failed to fetch project' });
-  }
-});
+  }),
+);
 
-projectsRouter.post('/', validateBody(projectCreateSchema), async (req, res) => {
-  try {
+projectsRouter.post(
+  '/',
+  validateBody(projectCreateSchema),
+  asyncHandler(async (req, res) => {
     const { name, customerId, description, status } = req.body;
     const result = await pool.query(
       `INSERT INTO projects (name, customer_id, description, status, created_at, updated_at)
@@ -69,14 +68,13 @@ projectsRouter.post('/', validateBody(projectCreateSchema), async (req, res) => 
       [name, customerId || null, description || null, status],
     );
     res.status(201).json(toCamelProject(result.rows[0]));
-  } catch (error) {
-    console.error('Error creating project:', error);
-    res.status(500).json({ error: 'Failed to create project' });
-  }
-});
+  }),
+);
 
-projectsRouter.put('/:id', validateBody(projectUpdateSchema), async (req, res) => {
-  try {
+projectsRouter.put(
+  '/:id',
+  validateBody(projectUpdateSchema),
+  asyncHandler(async (req, res) => {
     const { id } = req.params;
     const { name, customerId, description, status } = req.body;
 
@@ -90,7 +88,9 @@ projectsRouter.put('/:id', validateBody(projectUpdateSchema), async (req, res) =
     if (status !== undefined) { sets.push(`status = $${idx++}`); vals.push(status); }
 
     if (sets.length === 0) {
-      return res.status(400).json({ error: 'No fields to update' });
+      const error = new Error('No fields to update');
+      error.status = 400;
+      throw error;
     }
 
     sets.push(`updated_at = NOW()`);
@@ -104,28 +104,24 @@ projectsRouter.put('/:id', validateBody(projectUpdateSchema), async (req, res) =
       return res.status(404).json({ error: 'Project not found' });
     }
     res.json(toCamelProject(result.rows[0]));
-  } catch (error) {
-    console.error('Error updating project:', error);
-    res.status(500).json({ error: 'Failed to update project' });
-  }
-});
+  }),
+);
 
-projectsRouter.delete('/:id', async (req, res) => {
-  try {
+projectsRouter.delete(
+  '/:id',
+  asyncHandler(async (req, res) => {
     const { id } = req.params;
     const result = await pool.query('DELETE FROM projects WHERE id = $1 RETURNING *', [id]);
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Project not found' });
     }
     res.status(204).send();
-  } catch (error) {
-    console.error('Error deleting project:', error);
-    res.status(500).json({ error: 'Failed to delete project' });
-  }
-});
+  }),
+);
 
-projectsRouter.get('/:id/quotes', async (req, res) => {
-  try {
+projectsRouter.get(
+  '/:id/quotes',
+  asyncHandler(async (req, res) => {
     const { id } = req.params;
     const result = await pool.query(`
       SELECT q.*,
@@ -138,9 +134,6 @@ projectsRouter.get('/:id/quotes', async (req, res) => {
       WHERE q.project_id = $1
       ORDER BY q.created_at DESC
     `, [id]);
-    res.json(result.rows.map((row) => toCamelProject(row)));
-  } catch (error) {
-    console.error('Error fetching project quotes:', error);
-    res.status(500).json({ error: 'Failed to fetch project quotes' });
-  }
-});
+    res.json(result.rows.map((row) => toCamelQuote(row)));
+  }),
+);

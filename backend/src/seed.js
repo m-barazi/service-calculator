@@ -1,10 +1,12 @@
 import { Router } from 'express';
 import { pool } from './db.js';
+import { asyncHandler } from './error-handler.js';
 
 export const seedRouter = Router();
 
-seedRouter.post('/', async (req, res) => {
-  try {
+seedRouter.post(
+  '/',
+  asyncHandler(async (req, res) => {
     const catCount = await pool.query('SELECT COUNT(*) FROM categories');
     const categorySeeds = [
       { name: 'Print & Marketing', description: 'Visitenkarten, Flyer, Briefpapier', icon: 'printer', color: '#3B82F6', sortOrder: 0, visible: true },
@@ -58,8 +60,5 @@ seedRouter.post('/', async (req, res) => {
     }
 
     res.json({ message: 'Database seeded successfully', categories: categorySeeds.length, services: serviceSeeds.length });
-  } catch (error) {
-    console.error('Error seeding database:', error);
-    res.status(500).json({ error: 'Failed to seed database' });
-  }
-});
+  }),
+);

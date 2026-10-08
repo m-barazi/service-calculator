@@ -3,11 +3,13 @@ import { pool } from './db.js';
 import { toCamelCustomer } from './transforms.js';
 import { validateBody, customerCreateSchema, customerUpdateSchema } from './validation.js';
 import { parsePagination, buildListResponse } from './pagination.js';
+import { asyncHandler } from './error-handler.js';
 
 export const customersRouter = Router();
 
-customersRouter.get('/', async (req, res) => {
-  try {
+customersRouter.get(
+  '/',
+  asyncHandler(async (req, res) => {
     const wantsPagination = req.query.page !== undefined || req.query.limit !== undefined;
     if (wantsPagination) {
       const { page, limit, offset } = parsePagination(req.query);
@@ -22,28 +24,25 @@ customersRouter.get('/', async (req, res) => {
 
     const result = await pool.query('SELECT * FROM customers ORDER BY created_at DESC');
     res.json(result.rows.map(toCamelCustomer));
-  } catch (error) {
-    console.error('Error fetching customers:', error);
-    res.status(500).json({ error: 'Failed to fetch customers' });
-  }
-});
+  }),
+);
 
-customersRouter.get('/:id', async (req, res) => {
-  try {
+customersRouter.get(
+  '/:id',
+  asyncHandler(async (req, res) => {
     const { id } = req.params;
     const result = await pool.query('SELECT * FROM customers WHERE id = $1', [id]);
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Customer not found' });
     }
     res.json(toCamelCustomer(result.rows[0]));
-  } catch (error) {
-    console.error('Error fetching customer:', error);
-    res.status(500).json({ error: 'Failed to fetch customer' });
-  }
-});
+  }),
+);
 
-customersRouter.post('/', validateBody(customerCreateSchema), async (req, res) => {
-  try {
+customersRouter.post(
+  '/',
+  validateBody(customerCreateSchema),
+  asyncHandler(async (req, res) => {
     const { name, email, phone, street, zip, city, country, notes } = req.body;
     const result = await pool.query(
       `INSERT INTO customers (name, email, phone, street, zip, city, country, notes, created_at, updated_at)
@@ -52,14 +51,13 @@ customersRouter.post('/', validateBody(customerCreateSchema), async (req, res) =
       [name, email || null, phone || null, street || null, zip || null, city || null, country || null, notes || null],
     );
     res.status(201).json(toCamelCustomer(result.rows[0]));
-  } catch (error) {
-    console.error('Error creating customer:', error);
-    res.status(500).json({ error: 'Failed to create customer' });
-  }
-});
+  }),
+);
 
-customersRouter.put('/:id', validateBody(customerUpdateSchema), async (req, res) => {
-  try {
+customersRouter.put(
+  '/:id',
+  validateBody(customerUpdateSchema),
+  asyncHandler(async (req, res) => {
     const { id } = req.params;
     const { name, email, phone, street, zip, city, country, notes } = req.body;
 
@@ -87,14 +85,12 @@ customersRouter.put('/:id', validateBody(customerUpdateSchema), async (req, res)
       return res.status(404).json({ error: 'Customer not found' });
     }
     res.json(toCamelCustomer(result.rows[0]));
-  } catch (error) {
-    console.error('Error updating customer:', error);
-    res.status(500).json({ error: 'Failed to update customer' });
-  }
-});
+  }),
+);
 
-customersRouter.delete('/:id', async (req, res) => {
-  try {
+customersRouter.delete(
+  '/:id',
+  asyncHandler(async (req, res) => {
     const { id } = req.params;
     const refCheck = await pool.query('SELECT COUNT(*) FROM quotes WHERE customer_id = $1', [id]);
     const quoteCount = parseInt(refCheck.rows[0].count);
@@ -106,8 +102,5 @@ customersRouter.delete('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Customer not found' });
     }
     res.status(204).send();
-  } catch (error) {
-    console.error('Error deleting customer:', error);
-    res.status(500).json({ error: 'Failed to delete customer' });
-  }
-});
+  }),
+);

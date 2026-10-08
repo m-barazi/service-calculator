@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { pool } from './db.js';
 import { toCamelQuote } from './transforms.js';
+import { asyncHandler } from './error-handler.js';
 
 const VAT_RATE = 0.19;
 
@@ -27,8 +28,9 @@ export function buildDashboardData(aggregated, vatRate) {
   };
 }
 
-dashboardRouter.get('/', async (req, res) => {
-  try {
+dashboardRouter.get(
+  '/',
+  asyncHandler(async (req, res) => {
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
@@ -97,8 +99,5 @@ dashboardRouter.get('/', async (req, res) => {
     } finally {
       client.release();
     }
-  } catch (error) {
-    console.error('Error fetching dashboard:', error);
-    res.status(500).json({ error: 'Failed to fetch dashboard' });
-  }
-});
+  }),
+);

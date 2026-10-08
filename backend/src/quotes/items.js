@@ -6,11 +6,14 @@ import {
   quoteItemCreateSchema,
   quoteItemUpdateSchema,
 } from '../validation.js';
+import { asyncHandler } from '../error-handler.js';
 
 export const quoteItemsRouter = Router({ mergeParams: true });
 
-quoteItemsRouter.post('/', validateBody(quoteItemCreateSchema), async (req, res) => {
-  try {
+quoteItemsRouter.post(
+  '/',
+  validateBody(quoteItemCreateSchema),
+  asyncHandler(async (req, res) => {
     const { id } = req.params;
     const { serviceId, customName, customNote, quantity, unitPrice, purchasePrice, sortOrder } = req.body;
 
@@ -43,14 +46,13 @@ quoteItemsRouter.post('/', validateBody(quoteItemCreateSchema), async (req, res)
       [insertResult.rows[0].id],
     );
     res.status(201).json(toCamelQuoteItem(itemResult.rows[0]));
-  } catch (error) {
-    console.error('Error creating quote item:', error);
-    res.status(500).json({ error: 'Failed to create quote item' });
-  }
-});
+  }),
+);
 
-quoteItemsRouter.put('/:itemId', validateBody(quoteItemUpdateSchema), async (req, res) => {
-  try {
+quoteItemsRouter.put(
+  '/:itemId',
+  validateBody(quoteItemUpdateSchema),
+  asyncHandler(async (req, res) => {
     const { id, itemId } = req.params;
     const { serviceId, customName, customNote, quantity, unitPrice, purchasePrice, sortOrder } = req.body;
 
@@ -78,39 +80,34 @@ quoteItemsRouter.put('/:itemId', validateBody(quoteItemUpdateSchema), async (req
       return res.status(404).json({ error: 'Quote item not found' });
     }
     res.json(toCamelQuoteItem(result.rows[0]));
-  } catch (error) {
-    console.error('Error updating quote item:', error);
-    res.status(500).json({ error: 'Failed to update quote item' });
-  }
-});
+  }),
+);
 
-quoteItemsRouter.delete('/:itemId', async (req, res) => {
-  try {
+quoteItemsRouter.delete(
+  '/:itemId',
+  asyncHandler(async (req, res) => {
     const { id, itemId } = req.params;
     const result = await pool.query('DELETE FROM quote_items WHERE id = $1 AND quote_id = $2 RETURNING *', [itemId, id]);
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Quote item not found' });
     }
     res.status(204).send();
-  } catch (error) {
-    console.error('Error deleting quote item:', error);
-    res.status(500).json({ error: 'Failed to delete quote item' });
-  }
-});
+  }),
+);
 
-quoteItemsRouter.patch('/reorder', async (req, res) => {
-  try {
+quoteItemsRouter.patch(
+  '/reorder',
+  asyncHandler(async (req, res) => {
     const { id } = req.params;
     const { itemIds } = req.body;
     if (!Array.isArray(itemIds)) {
-      return res.status(400).json({ error: 'itemIds must be an array' });
+      const error = new Error('itemIds must be an array');
+      error.status = 400;
+      throw error;
     }
     for (let i = 0; i < itemIds.length; i++) {
       await pool.query('UPDATE quote_items SET sort_order = $1, updated_at = NOW() WHERE id = $2 AND quote_id = $3', [i, itemIds[i], id]);
     }
     res.json({ success: true });
-  } catch (error) {
-    console.error('Error reordering quote items:', error);
-    res.status(500).json({ error: 'Failed to reorder items' });
-  }
-});
+  }),
+);

@@ -1,8 +1,7 @@
 import { Router } from 'express';
 import { pool } from '../db.js';
 import { generateQuoteNumber } from '../numbers.js';
-import { computeQuoteTotalsForInvoice } from './totals.js';
-import { toCamelCustomer, toCamelQuote, toCamelQuoteItem } from '../transforms.js';
+import { toCamelQuote, toCamelQuoteItem } from '../transforms.js';
 import { quoteItemsRouter } from './items.js';
 import {
   validateBody,
@@ -12,26 +11,30 @@ import {
   quoteStatusSchema,
 } from '../validation.js';
 import { parsePagination, buildListResponse } from '../pagination.js';
+import { asyncHandler } from '../error-handler.js';
 
 export const quotesRouter = Router();
 quotesRouter.use('/:id/items', quoteItemsRouter);
 
-quotesRouter.get('/', async (req, res) => {
-  try {
+const quoteListQuery = `
+  SELECT q.*, c.name as customer_name, c.email as customer_email, c.phone as customer_phone,
+         c.street as customer_street, c.zip as customer_zip, c.city as customer_city,
+         c.country as customer_country, c.notes as customer_notes,
+         c.created_at as customer_created_at, c.updated_at as customer_updated_at
+  FROM quotes q
+  LEFT JOIN customers c ON q.customer_id = c.id
+`;
+
+quotesRouter.get(
+  '/',
+  asyncHandler(async (req, res) => {
     const wantsPagination = req.query.page !== undefined || req.query.limit !== undefined;
     if (wantsPagination) {
       const { page, limit, offset } = parsePagination(req.query);
       const [countResult, rowsResult] = await Promise.all([
         pool.query('SELECT COUNT(*) FROM quotes'),
         pool.query(
-          `SELECT q.*, c.name as customer_name, c.email as customer_email, c.phone as customer_phone,
-                  c.street as customer_street, c.zip as customer_zip, c.city as customer_city,
-                  c.country as customer_country, c.notes as customer_notes,
-                  c.created_at as customer_created_at, c.updated_at as customer_updated_at
-           FROM quotes q
-           LEFT JOIN customers c ON q.customer_id = c.id
-           ORDER BY q.created_at DESC
-           LIMIT $1 OFFSET $2`,
+          `${quoteListQuery} ORDER BY q.created_at DESC LIMIT $1 OFFSET $2`,
           [limit, offset],
         ),
       ]);
@@ -40,33 +43,17 @@ quotesRouter.get('/', async (req, res) => {
       return;
     }
 
-    const result = await pool.query(`
-      SELECT q.*, c.name as customer_name, c.email as customer_email, c.phone as customer_phone,
-             c.street as customer_street, c.zip as customer_zip, c.city as customer_city,
-             c.country as customer_country, c.notes as customer_notes,
-             c.created_at as customer_created_at, c.updated_at as customer_updated_at
-      FROM quotes q
-      LEFT JOIN customers c ON q.customer_id = c.id
-      ORDER BY q.created_at DESC
-    `);
+    const result = await pool.query(`${quoteListQuery} ORDER BY q.created_at DESC`);
     res.json(result.rows.map(toCamelQuote));
-  } catch (error) {
-    console.error('Error fetching quotes:', error);
-    res.status(500).json({ error: 'Failed to fetch quotes' });
-  }
-});
+  }),
+);
 
-quotesRouter.get('/:id', async (req, res) => {
-  try {
+quotesRouter.get(
+  '/:id',
+  asyncHandler(async (req, res) => {
     const { id } = req.params;
     const quoteResult = await pool.query(
-      `SELECT q.*, c.name as customer_name, c.email as customer_email, c.phone as customer_phone,
-              c.street as customer_street, c.zip as customer_zip, c.city as customer_city,
-              c.country as customer_country, c.notes as customer_notes,
-              c.created_at as customer_created_at, c.updated_at as customer_updated_at
-       FROM quotes q
-       LEFT JOIN customers c ON q.customer_id = c.id
-       WHERE q.id = $1`,
+      `${quoteListQuery} WHERE q.id = $1`,
       [id],
     );
     if (quoteResult.rows.length === 0) {
@@ -84,14 +71,13 @@ quotesRouter.get('/:id', async (req, res) => {
     const quote = toCamelQuote(quoteResult.rows[0]);
     quote.items = itemsResult.rows.map(toCamelQuoteItem);
     res.json(quote);
-  } catch (error) {
-    console.error('Error fetching quote:', error);
-    res.status(500).json({ error: 'Failed to fetch quote' });
-  }
-});
+  }),
+);
 
-quotesRouter.post('/', validateBody(quoteCreateSchema), async (req, res) => {
-  try {
+quotesRouter.post(
+  '/',
+  validateBody(quoteCreateSchema),
+  asyncHandler(async (req, res) => {
     const { title, customerId, customerName, projectId, status, discountType, discountValue, notes, validUntil } = req.body;
     const quoteNumber = await generateQuoteNumber();
     const result = await pool.query(
@@ -101,15 +87,14 @@ quotesRouter.post('/', validateBody(quoteCreateSchema), async (req, res) => {
       [quoteNumber, title, customerId || null, customerName || null, projectId || null, status || 'draft', discountType || null, discountValue ?? 0, notes || null, validUntil || null],
     );
     res.status(201).json(toCamelQuote(result.rows[0]));
-  } catch (error) {
-    console.error('Error creating quote:', error);
-    res.status(500).json({ error: 'Failed to create quote' });
-  }
-});
+  }),
+);
 
 // Create a quote together with its items in a single atomic transaction.
-quotesRouter.post('/with-items', validateBody(quoteWithItemsSchema), async (req, res) => {
-  try {
+quotesRouter.post(
+  '/with-items',
+  validateBody(quoteWithItemsSchema),
+  asyncHandler(async (req, res) => {
     const { title, customerId, customerName, projectId, status, discountType, discountValue, notes, validUntil, items } = req.body;
 
     const client = await pool.connect();
@@ -161,14 +146,13 @@ quotesRouter.post('/with-items', validateBody(quoteWithItemsSchema), async (req,
     } finally {
       client.release();
     }
-  } catch (error) {
-    console.error('Error creating quote with items:', error);
-    res.status(500).json({ error: 'Failed to create quote' });
-  }
-});
+  }),
+);
 
-quotesRouter.put('/:id', validateBody(quoteUpdateSchema), async (req, res) => {
-  try {
+quotesRouter.put(
+  '/:id',
+  validateBody(quoteUpdateSchema),
+  asyncHandler(async (req, res) => {
     const { id } = req.params;
     const { title, customerId, customerName, projectId, status, discountType, discountValue, notes, validUntil } = req.body;
 
@@ -197,28 +181,24 @@ quotesRouter.put('/:id', validateBody(quoteUpdateSchema), async (req, res) => {
       return res.status(404).json({ error: 'Quote not found' });
     }
     res.json(toCamelQuote(result.rows[0]));
-  } catch (error) {
-    console.error('Error updating quote:', error);
-    res.status(500).json({ error: 'Failed to update quote' });
-  }
-});
+  }),
+);
 
-quotesRouter.delete('/:id', async (req, res) => {
-  try {
+quotesRouter.delete(
+  '/:id',
+  asyncHandler(async (req, res) => {
     const { id } = req.params;
     const result = await pool.query('DELETE FROM quotes WHERE id = $1 RETURNING *', [id]);
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Quote not found' });
     }
     res.status(204).send();
-  } catch (error) {
-    console.error('Error deleting quote:', error);
-    res.status(500).json({ error: 'Failed to delete quote' });
-  }
-});
+  }),
+);
 
-quotesRouter.get('/:id/history', async (req, res) => {
-  try {
+quotesRouter.get(
+  '/:id/history',
+  asyncHandler(async (req, res) => {
     const { id } = req.params;
     const result = await pool.query(
       'SELECT * FROM quote_status_history WHERE quote_id = $1 ORDER BY created_at DESC',
@@ -232,14 +212,13 @@ quotesRouter.get('/:id/history', async (req, res) => {
       changedBy: row.changed_by,
       createdAt: row.created_at,
     })));
-  } catch (error) {
-    console.error('Error fetching quote status history:', error);
-    res.status(500).json({ error: 'Failed to fetch quote status history' });
-  }
-});
+  }),
+);
 
-quotesRouter.post('/:id/status', validateBody(quoteStatusSchema), async (req, res) => {
-  try {
+quotesRouter.post(
+  '/:id/status',
+  validateBody(quoteStatusSchema),
+  asyncHandler(async (req, res) => {
     const { id } = req.params;
     const { status, changedBy } = req.body;
 
@@ -249,12 +228,16 @@ quotesRouter.post('/:id/status', validateBody(quoteStatusSchema), async (req, re
       const quoteResult = await client.query('SELECT status FROM quotes WHERE id = $1 FOR UPDATE', [id]);
       if (quoteResult.rows.length === 0) {
         await client.query('ROLLBACK');
-        return res.status(404).json({ error: 'Quote not found' });
+        const error = new Error('Quote not found');
+        error.status = 404;
+        throw error;
       }
       const oldStatus = quoteResult.rows[0].status;
       if (oldStatus === status) {
         await client.query('ROLLBACK');
-        return res.status(400).json({ error: 'New status must differ from current status' });
+        const error = new Error('New status must differ from current status');
+        error.status = 400;
+        throw error;
       }
 
       const updateResult = await client.query(
@@ -274,14 +257,12 @@ quotesRouter.post('/:id/status', validateBody(quoteStatusSchema), async (req, re
     } finally {
       client.release();
     }
-  } catch (error) {
-    console.error('Error updating quote status:', error);
-    res.status(500).json({ error: 'Failed to update quote status' });
-  }
-});
+  }),
+);
 
-quotesRouter.post('/:id/duplicate', async (req, res) => {
-  try {
+quotesRouter.post(
+  '/:id/duplicate',
+  asyncHandler(async (req, res) => {
     const { id } = req.params;
 
     const quoteResult = await pool.query('SELECT * FROM quotes WHERE id = $1', [id]);
@@ -353,8 +334,5 @@ quotesRouter.post('/:id/duplicate', async (req, res) => {
     } finally {
       client.release();
     }
-  } catch (error) {
-    console.error('Error duplicating quote:', error);
-    res.status(500).json({ error: 'Failed to duplicate quote' });
-  }
-});
+  }),
+);

@@ -61,7 +61,7 @@ describe('API integration', () => {
 
       const res = await request(app).get('/api/services');
       expect(res.status).toBe(500);
-      expect(res.body.error).toBe('Failed to fetch services');
+      expect(res.body.error).toBe('Internal server error');
     });
 
     it('returns a paginated response when page or limit is requested', async () => {
