@@ -1,5 +1,20 @@
 import { useMemo, useState } from 'react'
 import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import {
   ChevronDown,
   ChevronUp,
   Eye,
@@ -9,20 +24,52 @@ import {
   Search,
   Trash2,
   Layers,
+  X,
 } from 'lucide-react'
 import { useApp } from '../hooks/useApp'
 import { CategoryFormModal } from '../components/CategoryFormModal'
 import { ConfirmDialog } from '../components/ConfirmDialog'
+import { SortableCategoryRow } from '../components/SortableCategoryRow'
 import type { Category } from '../types'
 
 export function CategoriesPage() {
-  const { categories, isLoadingCategories, updateCategory, deleteCategory } = useApp()
+  const {
+    categories,
+    isLoadingCategories,
+    updateCategory,
+    deleteCategory,
+    reorderCategories,
+  } = useApp()
   const [search, setSearch] = useState('')
   const [editing, setEditing] = useState<Category | undefined>(undefined)
   const [creating, setCreating] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState<Category | undefined>(undefined)
   const [isDeleting, setIsDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [isReordering, setIsReordering] = useState(false)
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
+  )
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    if (search.trim()) return
+    const oldIndex = filtered.findIndex((c) => c.id === active.id)
+    const newIndex = filtered.findIndex((c) => c.id === over.id)
+    if (oldIndex === -1 || newIndex === -1) return
+    const nextOrder = arrayMove(filtered, oldIndex, newIndex).map((c) => c.id)
+    setIsReordering(true)
+    try {
+      await reorderCategories(nextOrder)
+    } finally {
+      setIsReordering(false)
+    }
+  }
 
   if (isLoadingCategories) {
     return (
@@ -139,8 +186,17 @@ export function CategoriesPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Suche nach Name oder Beschreibung…"
-            className="input w-full pl-10"
+            className="input w-full pl-10 pr-9"
           />
+          {search && (
+            <button
+              onClick={() => setSearch('')}
+              className="absolute right-2 top-1/2 -translate-y-1/2 qty-btn"
+              aria-label="Suche löschen"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
         </div>
       </div>
 
@@ -148,7 +204,7 @@ export function CategoriesPage() {
       <div className="card hidden overflow-hidden md:block">
         {/* Header row */}
         <div className="grid grid-cols-[auto_2fr_1fr_80px_80px_80px_100px] gap-2 border-b border-border bg-canvas/40 px-5 py-3 text-2xs font-semibold uppercase tracking-wider text-ink-muted">
-          <span></span>
+          <span className="sr-only">Verschieben</span>
           <span>Name</span>
           <span>Beschreibung</span>
           <span>Farbe</span>
@@ -156,92 +212,36 @@ export function CategoriesPage() {
           <span className="text-center">Sichtbar</span>
           <span className="text-right">Aktionen</span>
         </div>
-        <div className="divide-y divide-border">
-          {filtered.map((c) => (
-            <div
-              key={c.id}
-              className="group grid grid-cols-[auto_2fr_1fr_80px_80px_80px_100px] gap-2 px-5 py-3.5 transition-colors hover:bg-elevated/40"
-            >
-              {/* Icon */}
-              <div className="flex items-center text-xl">
-                {c.icon || <Layers className="h-5 w-5 text-ink-muted" strokeWidth={1.5} />}
-              </div>
-              {/* Name */}
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="font-medium text-ink truncate">{c.name}</span>
-                {!c.visible && (
-                  <span className="badge-neutral shrink-0">Versteckt</span>
-                )}
-              </div>
-              {/* Description */}
-              <div className="flex items-center text-sm text-ink-soft truncate">
-                {c.description || '—'}
-              </div>
-              {/* Color */}
-              <div className="flex items-center">
-                {c.color ? (
-                  <span className="flex items-center gap-1.5">
-                    <span
-                      className="inline-block h-4 w-4 shrink-0 rounded-full border border-border"
-                      style={{ backgroundColor: c.color }}
-                    />
-                    <span className="text-2xs font-mono text-ink-muted">{c.color}</span>
-                  </span>
-                ) : (
-                  <span className="text-2xs text-ink-muted">—</span>
-                )}
-              </div>
-              {/* Sort order */}
-              <div className="flex items-center justify-center gap-0.5">
-                <button
-                  onClick={() => handleMoveSortOrder(c, 'up')}
-                  className="qty-btn"
-                  title="Nach oben verschieben"
-                >
-                  <ChevronUp className="h-3.5 w-3.5" />
-                </button>
-                <button
-                  onClick={() => handleMoveSortOrder(c, 'down')}
-                  className="qty-btn"
-                  title="Nach unten verschieben"
-                >
-                  <ChevronDown className="h-3.5 w-3.5" />
-                </button>
-              </div>
-              {/* Visibility */}
-              <div className="flex items-center justify-center">
-                <button
-                  onClick={() => handleToggleVisibility(c.id, c.visible)}
-                  className="qty-btn"
-                  title={c.visible ? 'Im Rechner ausblenden' : 'Im Rechner anzeigen'}
-                >
-                  {c.visible ? (
-                    <Eye className="h-4 w-4" />
-                  ) : (
-                    <EyeOff className="h-4 w-4" />
-                  )}
-                </button>
-              </div>
-              {/* Actions */}
-              <div className="flex items-center justify-end gap-0.5">
-                <button
-                  onClick={() => setEditing(c)}
-                  className="qty-btn"
-                  title="Bearbeiten"
-                >
-                  <Pencil className="h-3.5 w-3.5" />
-                </button>
-                <button
-                  onClick={() => setConfirmDelete(c)}
-                  className="qty-btn text-danger hover:bg-danger/10"
-                  title="Löschen"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              </div>
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}
+        >
+          <SortableContext
+            items={filtered.map((c) => c.id)}
+            strategy={verticalListSortingStrategy}
+            disabled={isReordering || !!search.trim()}
+          >
+            <div className="divide-y divide-border">
+              {filtered.map((c) => (
+                <SortableCategoryRow
+                  key={c.id}
+                  category={c}
+                  onEdit={setEditing}
+                  onDelete={setConfirmDelete}
+                  onToggleVisibility={handleToggleVisibility}
+                  onMove={handleMoveSortOrder}
+                />
+              ))}
             </div>
-          ))}
-        </div>
+          </SortableContext>
+        </DndContext>
+        {isReordering && (
+          <div className="flex items-center justify-center gap-2 border-t border-border px-5 py-3 text-sm text-ink-soft">
+            <div className="h-4 w-4 animate-spin rounded-full border-2 border-ink-muted border-t-ink" />
+            Sortierung wird gespeichert…
+          </div>
+        )}
       </div>
 
       {/* ─── Mobile cards ────────────────────────────── */}
