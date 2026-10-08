@@ -191,6 +191,64 @@ describe('API integration', () => {
     });
   });
 
+  describe('GET /api/categories', () => {
+    it('returns categories as camelCase', async () => {
+      mockPool([
+        {
+          rows: [
+            {
+              id: '550e8400-e29b-41d4-a716-446655440000',
+              name: 'Design',
+              description: null,
+              icon: '🎨',
+              color: '#ff0000',
+              sort_order: 0,
+              visible: true,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            },
+          ],
+        },
+      ]);
+
+      const res = await request(app).get('/api/categories');
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveLength(1);
+      expect(res.body[0]).toMatchObject({
+        id: '550e8400-e29b-41d4-a716-446655440000',
+        name: 'Design',
+        sortOrder: 0,
+        visible: true,
+      });
+    });
+
+    it('returns a paginated response when page or limit is requested', async () => {
+      mockPool([
+        { rows: [{ count: '5' }] },
+        {
+          rows: [
+            {
+              id: '550e8400-e29b-41d4-a716-446655440000',
+              name: 'Design',
+              description: null,
+              icon: '🎨',
+              color: '#ff0000',
+              sort_order: 0,
+              visible: true,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            },
+          ],
+        },
+      ]);
+
+      const res = await request(app).get('/api/categories?page=1&limit=10');
+      expect(res.status).toBe(200);
+      expect(res.body.data).toHaveLength(1);
+      expect(res.body.pagination).toEqual({ page: 1, limit: 10, total: 5, totalPages: 1 });
+    });
+  });
+
   describe('POST /api/categories', () => {
     it('rejects missing name', async () => {
       const res = await request(app).post('/api/categories').send({ color: '#fff' });

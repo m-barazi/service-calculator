@@ -1,41 +1,56 @@
 import { Router } from 'express';
 import { pool } from './db.js';
 import { toCamelCategory } from './transforms.js';
+import { parsePagination, buildListResponse } from './pagination.js';
 import {
   validateBody,
   categoryCreateSchema,
   categoryUpdateSchema,
   categoryReorderSchema,
 } from './validation.js';
+import { asyncHandler } from './error-handler.js';
 
 export const categoriesRouter = Router();
 
-categoriesRouter.get('/', async (req, res) => {
-  try {
+categoriesRouter.get(
+  '/',
+  asyncHandler(async (req, res) => {
+    const wantsPagination = req.query.page !== undefined || req.query.limit !== undefined;
+    if (wantsPagination) {
+      const { page, limit, offset } = parsePagination(req.query);
+      const [countResult, rowsResult] = await Promise.all([
+        pool.query('SELECT COUNT(*) FROM categories'),
+        pool.query('SELECT * FROM categories ORDER BY sort_order, name LIMIT $1 OFFSET $2', [
+          limit,
+          offset,
+        ]),
+      ]);
+      const total = parseInt(countResult.rows[0].count);
+      res.json(buildListResponse(rowsResult.rows.map(toCamelCategory), total, page, limit));
+      return;
+    }
+
     const result = await pool.query('SELECT * FROM categories ORDER BY sort_order, name');
     res.json(result.rows.map(toCamelCategory));
-  } catch (error) {
-    console.error('Error fetching categories:', error);
-    res.status(500).json({ error: 'Failed to fetch categories' });
-  }
-});
+  }),
+);
 
-categoriesRouter.get('/:id', async (req, res) => {
-  try {
+categoriesRouter.get(
+  '/:id',
+  asyncHandler(async (req, res) => {
     const { id } = req.params;
     const result = await pool.query('SELECT * FROM categories WHERE id = $1', [id]);
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Category not found' });
     }
     res.json(toCamelCategory(result.rows[0]));
-  } catch (error) {
-    console.error('Error fetching category:', error);
-    res.status(500).json({ error: 'Failed to fetch category' });
-  }
-});
+  }),
+);
 
-categoriesRouter.post('/', validateBody(categoryCreateSchema), async (req, res) => {
-  try {
+categoriesRouter.post(
+  '/',
+  validateBody(categoryCreateSchema),
+  asyncHandler(async (req, res) => {
     const { name, description, icon, color, sortOrder, visible } = req.body;
     const result = await pool.query(
       `INSERT INTO categories (name, description, icon, color, sort_order, visible, created_at, updated_at)
@@ -44,14 +59,13 @@ categoriesRouter.post('/', validateBody(categoryCreateSchema), async (req, res) 
       [name, description || null, icon || null, color || null, sortOrder ?? 0, visible ?? true],
     );
     res.status(201).json(toCamelCategory(result.rows[0]));
-  } catch (error) {
-    console.error('Error creating category:', error);
-    res.status(500).json({ error: 'Failed to create category' });
-  }
-});
+  }),
+);
 
-categoriesRouter.put('/:id', validateBody(categoryUpdateSchema), async (req, res) => {
-  try {
+categoriesRouter.put(
+  '/:id',
+  validateBody(categoryUpdateSchema),
+  asyncHandler(async (req, res) => {
     const { id } = req.params;
     const { name, description, icon, color, sortOrder, visible } = req.body;
 
@@ -77,14 +91,13 @@ categoriesRouter.put('/:id', validateBody(categoryUpdateSchema), async (req, res
       return res.status(404).json({ error: 'Category not found' });
     }
     res.json(toCamelCategory(result.rows[0]));
-  } catch (error) {
-    console.error('Error updating category:', error);
-    res.status(500).json({ error: 'Failed to update category' });
-  }
-});
+  }),
+);
 
-categoriesRouter.post('/reorder', validateBody(categoryReorderSchema), async (req, res) => {
-  try {
+categoriesRouter.post(
+  '/reorder',
+  validateBody(categoryReorderSchema),
+  asyncHandler(async (req, res) => {
     const { ids } = req.body;
     const client = await pool.connect();
     try {
@@ -104,14 +117,12 @@ categoriesRouter.post('/reorder', validateBody(categoryReorderSchema), async (re
     } finally {
       client.release();
     }
-  } catch (error) {
-    console.error('Error reordering categories:', error);
-    res.status(500).json({ error: 'Failed to reorder categories' });
-  }
-});
+  }),
+);
 
-categoriesRouter.delete('/:id', async (req, res) => {
-  try {
+categoriesRouter.delete(
+  '/:id',
+  asyncHandler(async (req, res) => {
     const { id } = req.params;
     const refCheck = await pool.query('SELECT COUNT(*) FROM services WHERE category_id = $1', [id]);
     const serviceCount = parseInt(refCheck.rows[0].count);
@@ -123,8 +134,5 @@ categoriesRouter.delete('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Category not found' });
     }
     res.status(204).send();
-  } catch (error) {
-    console.error('Error deleting category:', error);
-    res.status(500).json({ error: 'Failed to delete category' });
-  }
-});
+  }),
+);
