@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Copy,
   Eye,
@@ -12,13 +12,18 @@ import {
   TrendingUp,
 } from 'lucide-react'
 import { useApp } from '../hooks/useApp'
+import { usePagedList } from '../hooks/usePagedList'
+import { fetchServicesPage, fetchServiceStats } from '../lib/api'
 import { ServiceFormModal } from '../components/ServiceFormModal'
 import { ConfirmDialog } from '../components/ConfirmDialog'
+import { Pagination } from '../components/Pagination'
 import { formatEUR, formatPct } from '../lib/format'
-import type { Service } from '../types'
+import type { Service, ServiceStats } from '../types'
+
+const PAGE_SIZE = 12
 
 export function PriceListPage() {
-  const { services, isLoading, deleteService, updateService, categories: allCategories } = useApp()
+  const { isLoading: isLoadingApp, deleteService, updateService, categories: allCategories } = useApp()
   const [search, setSearch] = useState('')
   const [activeCategory, setActiveCategory] = useState<string | null>(null)
   const [editing, setEditing] = useState<Service | undefined>(undefined)
@@ -29,8 +34,39 @@ export function PriceListPage() {
   )
   const [isDeleting, setIsDeleting] = useState(false)
   const [isUpdating, setIsUpdating] = useState(false)
+  const [stats, setStats] = useState<ServiceStats | null>(null)
+  const [isLoadingStats, setIsLoadingStats] = useState(false)
 
-  if (isLoading) {
+  const fetchPage = useCallback(
+    (page: number, limit: number) =>
+      fetchServicesPage({ page, limit, search, categoryId: activeCategory ?? undefined }),
+    [search, activeCategory],
+  )
+
+  const {
+    data: services,
+    pagination,
+    isLoading: isLoadingServices,
+    loadPage,
+    refresh,
+  } = usePagedList<Service>({ fetchPage, limit: PAGE_SIZE })
+
+  const loadStats = useCallback(async () => {
+    setIsLoadingStats(true)
+    try {
+      setStats(await fetchServiceStats())
+    } finally {
+      setIsLoadingStats(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    loadStats()
+  }, [loadStats])
+
+  const isLoading = isLoadingApp || isLoadingServices || isLoadingStats
+
+  if (isLoading && services.length === 0 && !stats) {
     return (
       <div className="mx-auto max-w-7xl px-5 py-6 sm:px-8 sm:py-10">
         <div className="flex items-center justify-center py-20">
@@ -47,8 +83,11 @@ export function PriceListPage() {
     setIsDeleting(true)
     try {
       await deleteService(id)
+      await refresh()
+      await loadStats()
     } finally {
       setIsDeleting(false)
+      setConfirmDelete(undefined)
     }
   }
 
@@ -56,6 +95,8 @@ export function PriceListPage() {
     setIsUpdating(true)
     try {
       await updateService(id, { visible: !visible })
+      await refresh()
+      await loadStats()
     } finally {
       setIsUpdating(false)
     }
@@ -65,39 +106,23 @@ export function PriceListPage() {
     setIsUpdating(true)
     try {
       await updateService(id, { pinned: !pinned })
+      await refresh()
     } finally {
       setIsUpdating(false)
     }
   }
 
-  const displayCategories = useMemo(() => {
+  const categoryCountMap = useMemo(() => {
     const map = new Map<string, number>()
-    services.forEach((s) => map.set(s.categoryId ?? '', (map.get(s.categoryId ?? '') ?? 0) + 1))
+    stats?.categoryCounts.forEach((c) => map.set(c.categoryId, c.count))
+    return map
+  }, [stats])
+
+  const displayCategories = useMemo(() => {
     return allCategories
       .sort((a, b) => a.sortOrder - b.sortOrder)
-      .map((c) => ({ ...c, count: map.get(c.id) ?? 0 }))
-  }, [services, allCategories])
-
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    return services
-      .filter((s) => {
-        if (activeCategory && s.categoryId !== activeCategory) return false
-        if (!q) return true
-        const categoryName = allCategories.find(c => c.id === s.categoryId)?.name ?? s.categoryId ?? ''
-        return (
-          s.name.toLowerCase().includes(q) ||
-          categoryName.toLowerCase().includes(q)
-        )
-      })
-      .sort((a, b) => {
-        const catA = allCategories.find(c => c.id === a.categoryId)
-        const catB = allCategories.find(c => c.id === b.categoryId)
-        const sortA = catA ? catA.sortOrder : 999
-        const sortB = catB ? catB.sortOrder : 999
-        return sortA - sortB || Number(b.pinned) - Number(a.pinned) || a.name.localeCompare(b.name)
-      })
-  }, [services, activeCategory, search, allCategories])
+      .map((c) => ({ ...c, count: categoryCountMap.get(c.id) ?? 0 }))
+  }, [allCategories, categoryCountMap])
 
   return (
     <div className="mx-auto max-w-7xl px-5 py-6 sm:px-8 sm:py-10">
@@ -126,11 +151,11 @@ export function PriceListPage() {
       <div className="mb-6 grid gap-3 sm:grid-cols-3">
         <StatCard
           eyebrow="Leistungen gesamt"
-          value={services.length.toString()}
+          value={stats?.totalCount.toString() ?? '—'}
         />
         <StatCard
           eyebrow="Sichtbar im Rechner"
-          value={services.filter((s) => s.visible).length.toString()}
+          value={stats?.visibleCount.toString() ?? '—'}
         />
         <StatCard
           eyebrow="Kategorien"
@@ -154,7 +179,7 @@ export function PriceListPage() {
           <div className="flex flex-wrap gap-1.5">
             <CategoryChip
               label="Alle"
-              count={services.length}
+              count={stats?.totalCount ?? 0}
               active={activeCategory === null}
               onClick={() => setActiveCategory(null)}
             />
@@ -185,7 +210,7 @@ export function PriceListPage() {
           <span className="text-right">Aktionen</span>
         </div>
         <div className="divide-y divide-border">
-          {filtered.map((s) => {
+          {services.map((s) => {
             const profit = s.salePrice - s.purchasePrice
             const margin = s.salePrice > 0 ? profit / s.salePrice : 0
             const categoryName = allCategories.find(c => c.id === s.categoryId)?.name ?? s.categoryId ?? ''
@@ -288,7 +313,7 @@ export function PriceListPage() {
 
       {/* ─── Mobile cards ────────────────────────────── */}
       <div className="flex flex-col gap-2.5 md:hidden">
-        {filtered.map((s) => {
+        {services.map((s) => {
           const profit = s.salePrice - s.purchasePrice
           const margin = s.salePrice > 0 ? profit / s.salePrice : 0
           const categoryName = allCategories.find(c => c.id === s.categoryId)?.name ?? s.categoryId ?? ''
@@ -387,7 +412,7 @@ export function PriceListPage() {
       </div>
 
       {/* Empty state */}
-      {filtered.length === 0 && (
+      {services.length === 0 && (
         <div className="card flex flex-col items-center justify-center gap-2 p-12 text-center">
           <TrendingUp
             className="h-8 w-8 text-ink-muted"
@@ -411,19 +436,37 @@ export function PriceListPage() {
         </div>
       )}
 
+      {services.length > 0 && (
+        <div className="mt-6">
+          <Pagination pagination={pagination} onPageChange={loadPage} />
+        </div>
+      )}
+
       {/* Modals */}
       <ServiceFormModal
         open={creating}
-        onClose={() => setCreating(false)}
+        onClose={() => {
+          setCreating(false)
+          refresh()
+          loadStats()
+        }}
       />
       <ServiceFormModal
         open={!!editing}
-        onClose={() => setEditing(undefined)}
+        onClose={() => {
+          setEditing(undefined)
+          refresh()
+          loadStats()
+        }}
         service={editing}
       />
       <ServiceFormModal
         open={!!cloning}
-        onClose={() => setCloning(undefined)}
+        onClose={() => {
+          setCloning(undefined)
+          refresh()
+          loadStats()
+        }}
         cloneFrom={cloning}
       />
       <ConfirmDialog

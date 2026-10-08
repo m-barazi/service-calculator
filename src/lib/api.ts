@@ -1,5 +1,5 @@
 /// <reference types="vite/client" />
-import type { Service, Category, Customer, Quote, QuoteItem, QuoteWithItems, DashboardData, Project, Invoice, InvoiceWithItems, InvoiceStatus, PaginatedResponse, PaginationMeta } from '../types'
+import type { Service, ServiceStats, ServiceListParams, Category, Customer, Quote, QuoteItem, QuoteWithItems, DashboardData, Project, Invoice, InvoiceWithItems, InvoiceStatus, PaginatedResponse, PaginationMeta } from '../types'
 
 const API_URL = import.meta.env.VITE_API_URL || '/api'
 
@@ -37,6 +37,28 @@ export async function fetchServices(): Promise<Service[]> {
   if (!res.ok) throw new Error(await extractError(res, 'Preisliste konnte nicht geladen werden'))
   const data = await res.json()
   return data.map(toCamel)
+}
+
+export async function fetchServicesPage({ page, limit, search, categoryId, visible }: ServiceListParams): Promise<PaginatedResponse<Service>> {
+  const params = new URLSearchParams()
+  if (page !== undefined) params.set('page', String(page))
+  if (limit !== undefined) params.set('limit', String(limit))
+  if (search) params.set('search', search)
+  if (categoryId) params.set('categoryId', categoryId)
+  if (visible !== undefined) params.set('visible', String(visible))
+  const res = await fetch(`${API_URL}/services?${params.toString()}`)
+  if (!res.ok) throw new Error(await extractError(res, 'Preisliste konnte nicht geladen werden'))
+  const data = await res.json()
+  return {
+    data: data.data.map(toCamel),
+    pagination: data.pagination,
+  }
+}
+
+export async function fetchServiceStats(): Promise<ServiceStats> {
+  const res = await fetch(`${API_URL}/services/stats`)
+  if (!res.ok) throw new Error(await extractError(res, 'Preislisten-Statistik konnte nicht geladen werden'))
+  return res.json()
 }
 
 export async function createService(service: Omit<Service, 'id' | 'createdAt' | 'updatedAt'>): Promise<Service> {

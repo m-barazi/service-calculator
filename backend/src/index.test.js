@@ -92,6 +92,62 @@ describe('API integration', () => {
       expect(res.body.data).toHaveLength(1);
       expect(res.body.pagination).toEqual({ page: 2, limit: 10, total: 42, totalPages: 5 });
     });
+
+    it('filters services by search and category', async () => {
+      mockPool([
+        { rows: [{ count: '1' }] },
+        {
+          rows: [
+            {
+              id: 's-2',
+              name: 'SEO Optimierung',
+              category_id: '550e8400-e29b-41d4-a716-446655440000',
+              purchase_price: 0,
+              sale_price: 120,
+              default_quantity: 1,
+              url: null,
+              note: null,
+              visible: true,
+              pinned: false,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            },
+          ],
+        },
+      ]);
+
+      const res = await request(app).get('/api/services?search=seo&categoryId=550e8400-e29b-41d4-a716-446655440000&visible=true&page=1&limit=10');
+      expect(res.status).toBe(200);
+      expect(res.body.data).toHaveLength(1);
+      expect(res.body.data[0].name).toBe('SEO Optimierung');
+      expect(res.body.pagination.total).toBe(1);
+    });
+  });
+
+  describe('GET /api/services/stats', () => {
+    it('returns total, visible and per-category counts', async () => {
+      mockPool([
+        { rows: [{ count: '12' }] },
+        { rows: [{ count: '8' }] },
+        {
+          rows: [
+            { category_id: '550e8400-e29b-41d4-a716-446655440000', count: '7' },
+            { category_id: '550e8400-e29b-41d4-a716-446655440001', count: '5' },
+          ],
+        },
+      ]);
+
+      const res = await request(app).get('/api/services/stats');
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({
+        totalCount: 12,
+        visibleCount: 8,
+        categoryCounts: [
+          { categoryId: '550e8400-e29b-41d4-a716-446655440000', count: 7 },
+          { categoryId: '550e8400-e29b-41d4-a716-446655440001', count: 5 },
+        ],
+      });
+    });
   });
 
   describe('POST /api/services', () => {

@@ -22,6 +22,20 @@ export interface Service {
   updatedAt: number | string
 }
 
+export interface ServiceStats {
+  totalCount: number
+  visibleCount: number
+  categoryCounts: { categoryId: string; count: number }[]
+}
+
+export interface ServiceListParams {
+  page?: number
+  limit?: number
+  search?: string
+  categoryId?: string | null
+  visible?: boolean
+}
+
 export interface Category {
   id: string
   name: string
