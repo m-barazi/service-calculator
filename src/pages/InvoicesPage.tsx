@@ -85,14 +85,32 @@ export function InvoicesPage() {
   const [selectedInvoice, setSelectedInvoice] = useState<InvoiceWithItems | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<Invoice | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
-  const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState<InvoiceStatus | 'all'>('all')
-  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false)
+  const [search, setSearch] = useState(() => searchParams.get('search') ?? '')
+  const [statusFilter, setStatusFilter] = useState<InvoiceStatus | 'all'>(() => {
+    const s = searchParams.get('status') as InvoiceStatus | null
+    return STATUS_OPTIONS.some((o) => o.value === s) ? (s as InvoiceStatus) : 'all'
+  })
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState<Record<string, boolean>>({})
 
   const filteredInvoices = useMemo(
     () => filterInvoices(invoices, { search, status: statusFilter }),
     [invoices, search, statusFilter],
   )
+
+  // Persist search/status filters in URL for deep-linking.
+  useEffect(() => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        if (search.trim()) next.set('search', search.trim())
+        else next.delete('search')
+        if (statusFilter !== 'all') next.set('status', statusFilter)
+        else next.delete('status')
+        return next
+      },
+      { replace: true },
+    )
+  }, [search, statusFilter, setSearchParams])
 
   const openInvoice = useCallback(
     async (id: string) => {
@@ -112,18 +130,20 @@ export function InvoicesPage() {
   }, [searchParams, isLoadingInvoices, invoices])
 
   const handleStatusChange = useCallback(
-    async (newStatus: InvoiceStatus) => {
-      if (!selectedInvoice || newStatus === selectedInvoice.status) return
-      setIsUpdatingStatus(true)
+    async (id: string, newStatus: InvoiceStatus) => {
+      const current = invoices.find((inv) => inv.id === id)
+      if (!current || current.status === newStatus) return
+      setIsUpdatingStatus((prev) => ({ ...prev, [id]: true }))
       try {
-        await updateInvoice(selectedInvoice.id, { status: newStatus })
-        const detail = await fetchInvoiceDetail(selectedInvoice.id)
-        setSelectedInvoice(detail)
+        await updateInvoice(id, { status: newStatus })
+        const detail = await fetchInvoiceDetail(id)
+        setSelectedInvoice((prev) => (prev?.id === id ? detail : prev))
+        await refresh()
       } finally {
-        setIsUpdatingStatus(false)
+        setIsUpdatingStatus((prev) => ({ ...prev, [id]: false }))
       }
     },
-    [selectedInvoice, updateInvoice, fetchInvoiceDetail],
+    [invoices, updateInvoice, fetchInvoiceDetail, refresh],
   )
 
   const handleDelete = useCallback(async () => {
@@ -260,8 +280,10 @@ export function InvoicesPage() {
                 <div className="relative">
                   <select
                     value={selectedInvoice.status}
-                    onChange={(e) => handleStatusChange(e.target.value as InvoiceStatus)}
-                    disabled={isUpdatingStatus}
+                    onChange={(e) =>
+                      handleStatusChange(selectedInvoice.id, e.target.value as InvoiceStatus)
+                    }
+                    disabled={isUpdatingStatus[selectedInvoice.id]}
                     className="input appearance-none pr-10 disabled:opacity-60"
                   >
                     {STATUS_OPTIONS.map((opt) => (
@@ -443,37 +465,92 @@ export function InvoicesPage() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {filteredInvoices.map((invoice) => {
             const info = STATUS_MAP[invoice.status] ?? STATUS_MAP.draft
+            const isOverdue =
+              invoice.dueDate &&
+              invoice.status !== 'paid' &&
+              invoice.status !== 'cancelled' &&
+              new Date(invoice.dueDate) < new Date(new Date().toDateString())
             return (
-              <button
+              <div
                 key={invoice.id}
-                onClick={() => openInvoice(invoice.id)}
-                className="card group flex flex-col gap-3 p-5 text-left transition hover:border-ink-faint"
+                className="card group flex flex-col gap-3 p-5 transition hover:border-ink-faint"
               >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <p className="eyebrow mb-1">{invoice.invoiceNumber}</p>
-                    <h3 className="font-semibold text-ink truncate">{invoice.title}</h3>
+                <button
+                  onClick={() => openInvoice(invoice.id)}
+                  className="text-left"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="eyebrow mb-1">{invoice.invoiceNumber}</p>
+                      <h3 className="font-semibold text-ink truncate">{invoice.title}</h3>
+                    </div>
+                    <span
+                      className={`shrink-0 rounded-full px-2.5 py-0.5 text-2xs font-medium ${info.cls}`}
+                    >
+                      {info.label}
+                    </span>
                   </div>
-                  <span
-                    className={`shrink-0 rounded-full px-2.5 py-0.5 text-2xs font-medium ${info.cls}`}
-                  >
-                    {info.label}
-                  </span>
-                </div>
-                {(invoice.customerName || invoice.projectName) && (
-                  <p className="text-sm text-ink-soft truncate">
-                    {invoice.customerName}
-                    {invoice.customerName && invoice.projectName && ' · '}
-                    {invoice.projectName}
-                  </p>
-                )}
+                  {(invoice.customerName || invoice.projectName) && (
+                    <p className="mt-1 text-sm text-ink-soft truncate">
+                      {invoice.customerName}
+                      {invoice.customerName && invoice.projectName && ' · '}
+                      {invoice.projectName}
+                    </p>
+                  )}
+                  <div className="mt-2 space-y-1">
+                    {invoice.paidAt && (
+                      <p className="text-2xs font-medium text-emerald-600 dark:text-emerald-400">
+                        Bezahlt am {formatDate(invoice.paidAt)}
+                      </p>
+                    )}
+                    {invoice.dueDate && (
+                      <p
+                        className={`text-2xs ${
+                          isOverdue
+                            ? 'font-medium text-amber-600 dark:text-amber-400'
+                            : 'text-ink-muted'
+                        }`}
+                      >
+                        Fällig {formatDate(invoice.dueDate)}
+                        {isOverdue && ' · Überfällig'}
+                      </p>
+                    )}
+                  </div>
+                </button>
                 <div className="mt-auto flex items-center justify-between border-t border-border pt-3">
-                  <span className="text-sm font-semibold text-ink">
-                    {formatEUR(invoice.totalGross)}
-                  </span>
-                  <span className="text-2xs text-ink-muted">{formatDate(invoice.createdAt)}</span>
+                  <div className="relative">
+                    <select
+                      value={invoice.status}
+                      onChange={(e) => {
+                        e.stopPropagation()
+                        handleStatusChange(invoice.id, e.target.value as InvoiceStatus)
+                      }}
+                      disabled={isUpdatingStatus[invoice.id]}
+                      className="appearance-none rounded-full border border-border bg-surface py-1 pl-2.5 pr-7 text-2xs font-medium text-ink-soft transition hover:border-border-strong hover:text-ink disabled:opacity-60"
+                    >
+                      {STATUS_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3 w-3 -translate-y-1/2 text-ink-muted" />
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="num text-sm font-semibold text-ink">
+                      {formatEUR(invoice.totalGross)}
+                    </span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setConfirmDelete(invoice)
+                      }}
+                      className="qty-btn text-danger hover:bg-danger/10"
+                      title="Löschen"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                 </div>
-              </button>
+              </div>
             )
           })}
         </div>
