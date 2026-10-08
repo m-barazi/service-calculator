@@ -17,6 +17,8 @@ import {
   seedRateLimiter,
   isSeedAllowed,
 } from './security.js';
+import { notFoundHandler, errorHandler } from './error-handler.js';
+import morgan from 'morgan';
 
 dotenv.config();
 
@@ -24,6 +26,12 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(helmetMiddleware);
+
+// Request logging: concise Apache-style in production, colored dev format otherwise.
+// Disabled in test mode to keep test output readable.
+if (process.env.NODE_ENV !== 'test') {
+  app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
+}
 
 // CORS: allow configured frontend origin; fall back to any origin only in development.
 const FRONTEND_URL = process.env.FRONTEND_URL || (process.env.NODE_ENV === 'production' ? null : '*');
@@ -54,6 +62,12 @@ if (isSeedAllowed()) {
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
+
+// 404 handler for unknown API paths.
+app.use('/api', notFoundHandler);
+
+// Centralised error handler must be the last middleware.
+app.use(errorHandler);
 
 export { app };
 

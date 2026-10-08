@@ -201,7 +201,11 @@ export function validateBody(schema) {
         path: issue.path,
         message: issue.message,
       }));
-      return res.status(400).json({ error: 'Invalid request body', issues });
+      const error = new Error('Invalid request body');
+      error.name = 'ValidationError';
+      error.status = 400;
+      error.details = issues;
+      return next(error);
     }
     next();
   };
