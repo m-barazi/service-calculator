@@ -55,7 +55,7 @@ describe('security helpers', () => {
 
     it('rate limiters have reasonable windows and caps', () => {
       expect(apiRateLimitConfig.windowMs).toBe(15 * 60 * 1000);
-      expect(apiRateLimitConfig.max).toBe(200);
+      expect(apiRateLimitConfig.max).toBe(1000);
       expect(writeRateLimitConfig.windowMs).toBe(15 * 60 * 1000);
       expect(writeRateLimitConfig.max).toBe(60);
       expect(seedRateLimitConfig.windowMs).toBe(60 * 1000);

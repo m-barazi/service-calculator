@@ -26,6 +26,26 @@ import type { Service, ServiceStats } from '../types'
 
 const PAGE_SIZE = 12
 
+function useServiceStats() {
+  const [stats, setStats] = useState<ServiceStats | null>(null)
+  const [isLoadingStats, setIsLoadingStats] = useState(false)
+
+  const loadStats = useCallback(async () => {
+    setIsLoadingStats(true)
+    try {
+      setStats(await fetchServiceStats())
+    } finally {
+      setIsLoadingStats(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    loadStats()
+  }, [loadStats])
+
+  return { stats, isLoadingStats, loadStats }
+}
+
 export function PriceListPage() {
   const { isLoading: isLoadingApp, deleteService, updateService, categories: allCategories } = useApp()
   const [editing, setEditing] = useState<Service | undefined>(undefined)
@@ -45,8 +65,6 @@ export function PriceListPage() {
   const [isBulkDeleting, setIsBulkDeleting] = useState(false)
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
-  const [stats, setStats] = useState<ServiceStats | null>(null)
-  const [isLoadingStats, setIsLoadingStats] = useState(false)
   const [search, setSearch] = useState(() => searchParams.get('search') ?? '')
   const [activeCategory, setActiveCategory] = useState<string | null>(() => searchParams.get('category'))
 
@@ -64,18 +82,7 @@ export function PriceListPage() {
     refresh,
   } = usePagedList<Service>({ fetchPage, limit: PAGE_SIZE })
 
-  const loadStats = useCallback(async () => {
-    setIsLoadingStats(true)
-    try {
-      setStats(await fetchServiceStats())
-    } finally {
-      setIsLoadingStats(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    loadStats()
-  }, [loadStats])
+  const { stats, isLoadingStats, loadStats } = useServiceStats()
 
   const isLoading = isLoadingApp || isLoadingServices || isLoadingStats
 
