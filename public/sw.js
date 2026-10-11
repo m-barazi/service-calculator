@@ -10,13 +10,24 @@ self.addEventListener('install', (event) => {
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(
-        keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key)),
+    caches
+      .keys()
+      .then((keys) =>
+        Promise.all(
+          keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key)),
+        ),
+      )
+      .then(() => self.clients.claim())
+      .then(() =>
+        self.clients.matchAll({ type: 'window' }).then((clients) => {
+          clients.forEach((client) => {
+            // Force a navigation on every controlled tab so the new
+            // application shell is loaded immediately after the update.
+            if ('navigate' in client) client.navigate(client.url)
+          })
+        }),
       ),
-    ),
   )
-  self.clients.claim()
 })
 
 self.addEventListener('fetch', (event) => {
@@ -29,15 +40,37 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
+  // Navigation requests: always go to the network so users never see an
+  // old index.html after a new deployment.
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          const clone = response.clone()
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(event.request, clone)
+          })
+          return response
+        })
+        .catch(() =>
+          caches.match(event.request).then((cached) => cached || Response.error()),
+        ),
+    )
+    return
+  }
+
+  // Static assets: stale-while-revalidate. Serve from cache immediately and
+  // refresh the cache entry in the background.
   event.respondWith(
-    fetch(event.request)
-      .then((response) => {
+    caches.match(event.request).then((cached) => {
+      const networkFetch = fetch(event.request).then((response) => {
         const clone = response.clone()
         caches.open(CACHE_NAME).then((cache) => {
           cache.put(event.request, clone)
         })
         return response
       })
-      .catch(() => caches.match(event.request).then((cached) => cached || Response.error())),
+      return cached || networkFetch
+    }),
   )
 })
